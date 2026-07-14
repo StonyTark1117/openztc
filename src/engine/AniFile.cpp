@@ -23,7 +23,10 @@ Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::str
     (*animations)[direction]->height = height;
   }
 
-  return new Animation(animations);
+  Animation * animation = new Animation(animations);
+  animation->setBox((float) ini_reader->getInt("animation", "x0"), (float) ini_reader->getInt("animation", "y0"),
+                    (float) ini_reader->getInt("animation", "x1"), (float) ini_reader->getInt("animation", "y1"));
+  return animation;
 }
 
 std::string AniFile::getAnimationDirectory(IniReader * ini_reader) {

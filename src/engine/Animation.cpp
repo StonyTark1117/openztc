@@ -52,6 +52,25 @@ bool Animation::getSize(float * w, float * h, CompassDirection direction) {
   return false;
 }
 
+void Animation::setBox(float x0, float y0, float x1, float y1) {
+  this->box_x0 = x0;
+  this->box_y0 = y0;
+  this->box_x1 = x1;
+  this->box_y1 = y1;
+  this->has_box = x1 > x0 && y1 > y0;
+}
+
+bool Animation::getBox(float * x0, float * y0, float * width, float * height) {
+  if (!this->has_box) {
+    return false;
+  }
+  *x0 = this->box_x0;
+  *y0 = this->box_y0;
+  *width = this->box_x1 - this->box_x0;
+  *height = this->box_y1 - this->box_y0;
+  return true;
+}
+
 bool Animation::getSizeByKey(const std::string &key, float * w, float * h) {
   if (this->textures.contains(key) && !this->textures[key].empty()) {
     return SDL_GetTextureSize(this->textures[key][0], w, h);

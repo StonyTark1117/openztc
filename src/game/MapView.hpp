@@ -24,6 +24,8 @@ public:
   bool loadMap(const std::string &zoo_file_name);
   void setZoom(float zoom) { this->zoom = zoom; }
   void lookAtTile(float tile_x, float tile_y);
+  // Map orientation in quarter turns, like the rotate camera option in game
+  void setOrientation(int orientation);
 
   // Returns false when the user wants to leave the map
   bool handleInputs(std::vector<Input> &inputs);
@@ -39,12 +41,16 @@ private:
   // Objects sorted in paint order and their animations by object code
   std::vector<const ZooObject *> sorted_objects;
   std::unordered_map<std::string, Animation *> object_animations;
+  // Tiles carrying a path, for neighbor based path piece selection
+  std::unordered_map<uint64_t, bool> path_tiles;
   int missing_object_art = 0;
 
   // Camera offset in world pixels at zoom 1 and the zoom factor
   float camera_x = 0.0f;
   float camera_y = 0.0f;
   float zoom = 1.0f;
+  // Orientation 1 matches the original game's default camera
+  int orientation = 1;
   bool dragging = false;
   SDL_FPoint last_cursor = {0.0f, 0.0f};
 
@@ -56,6 +62,9 @@ private:
   Animation * objectAnimation(const ZooObject * object, std::string &draw_key);
   void buildCornerHeights();
   float cornerHeight(uint32_t x, uint32_t y);
+  void tileToWorld(float tile_x, float tile_y, float * world_x, float * world_y);
+  std::string rotationDirection(uint32_t rotation);
+  void sortObjects();
 };
 
 #endif // MAP_VIEW_HPP

@@ -11,7 +11,7 @@
 
 int main(int argc, char ** argv) {
   if (argc < 3) {
-    printf("usage: mapshot <map name, like maps/airport.zoo> <output.bmp> [width] [height] [zoom] [tile_x tile_y]\n");
+    printf("usage: mapshot <map name, like maps/airport.zoo> <output.bmp> [width] [height] [zoom] [tile_x tile_y] [orientation 0-3]\n");
     return 1;
   }
   int width = argc > 3 ? atoi(argv[3]) : 800;
@@ -42,6 +42,9 @@ int main(int argc, char ** argv) {
   }
   if (argc > 5) {
     view.setZoom((float) atof(argv[5]));
+  }
+  if (argc > 8) {
+    view.setOrientation(atoi(argv[8]));
   }
   if (argc > 7) {
     view.lookAtTile((float) atof(argv[6]), (float) atof(argv[7]));

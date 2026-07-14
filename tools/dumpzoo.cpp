@@ -1,16 +1,22 @@
 // Developer tool: prints a summary of a zoo map/save file
 #include <cstdio>
+#include <cstring>
 #include <map>
 
 #include "../src/engine/ZooFile.hpp"
 
 int main(int argc, char ** argv) {
   if (argc < 2) {
-    printf("usage: dumpzoo <file.zoo> [more.zoo ...]\n");
+    printf("usage: dumpzoo [--objects] <file.zoo> [more.zoo ...]\n");
     return 1;
   }
+  bool list_objects = false;
   int failures = 0;
   for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--objects") == 0) {
+      list_objects = true;
+      continue;
+    }
     ZooFile * zoo = ZooFile::loadFromFile(argv[i]);
     if (zoo == nullptr) {
       printf("%s: FAILED to parse\n", argv[i]);
@@ -39,6 +45,13 @@ int main(int argc, char ** argv) {
       printf("%02x:%d ", entry.first, entry.second);
     }
     printf("\n");
+    if (list_objects) {
+      for (const ZooObject &object : zoo->getObjects()) {
+        printf("  %s/%s/%s x=%u (%.2f) y=%u (%.2f) rotation=%u\n",
+               object.category.c_str(), object.subcategory.c_str(), object.code.c_str(),
+               object.x, (float) object.x / 64.0f, object.y, (float) object.y / 64.0f, object.rotation);
+      }
+    }
     delete zoo;
   }
   return failures == 0 ? 0 : 1;

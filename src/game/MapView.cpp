@@ -47,18 +47,69 @@ bool MapView::loadMap(const std::string &zoo_file_name) {
   }
   SDL_Log("Loaded map %s: %ux%u tiles, %u objects", zoo_file_name.c_str(), this->zoo->getWidth(), this->zoo->getHeight(), (uint32_t) this->zoo->getObjects().size());
   this->buildCornerHeights();
-  // Paint order: back to front by tile diagonal
   for (const ZooObject &object : this->zoo->getObjects()) {
     this->sorted_objects.push_back(&object);
   }
-  std::sort(this->sorted_objects.begin(), this->sorted_objects.end(),
-            [](const ZooObject * a, const ZooObject * b) {
-              return a->x + a->y < b->x + b->y;
-            });
+  this->sortObjects();
+  for (const ZooObject &object : this->zoo->getObjects()) {
+    if (object.category == "paths") {
+      this->path_tiles[((uint64_t) (object.x / 64) << 32) | (object.y / 64)] = true;
+    }
+  }
   // Start looking at the middle of the map
-  this->camera_x = 0.0f;
-  this->camera_y = (float) (this->zoo->getWidth() + this->zoo->getHeight()) / 2.0f * TILE_HALF_HEIGHT;
+  this->lookAtTile((float) this->zoo->getWidth() / 2.0f, (float) this->zoo->getHeight() / 2.0f);
   return true;
+}
+
+// Applies the map orientation while projecting tile coordinates to world
+// pixels. A quarter turn of the camera is a quarter turn of the tile grid
+// around its origin.
+void MapView::tileToWorld(float tile_x, float tile_y, float * world_x, float * world_y) {
+  float u = tile_x - tile_y;
+  float v = tile_x + tile_y;
+  float rotated_u;
+  float rotated_v;
+  switch (this->orientation & 3) {
+    case 1:
+      rotated_u = v;
+      rotated_v = -u;
+      break;
+    case 2:
+      rotated_u = -u;
+      rotated_v = -v;
+      break;
+    case 3:
+      rotated_u = -v;
+      rotated_v = u;
+      break;
+    default:
+      rotated_u = u;
+      rotated_v = v;
+      break;
+  }
+  *world_x = rotated_u * TILE_HALF_WIDTH;
+  *world_y = rotated_v * TILE_HALF_HEIGHT;
+}
+
+// Paint order: back to front by screen depth
+void MapView::sortObjects() {
+  std::sort(this->sorted_objects.begin(), this->sorted_objects.end(),
+            [this](const ZooObject * a, const ZooObject * b) {
+              float world_x;
+              float depth_a;
+              float depth_b;
+              this->tileToWorld((float) a->x / 64.0f, (float) a->y / 64.0f, &world_x, &depth_a);
+              this->tileToWorld((float) b->x / 64.0f, (float) b->y / 64.0f, &world_x, &depth_b);
+              return depth_a < depth_b;
+            });
+}
+
+void MapView::setOrientation(int orientation) {
+  this->orientation = ((orientation % 4) + 4) % 4;
+  if (this->zoo != nullptr) {
+    this->sortObjects();
+    this->lookAtTile((float) this->zoo->getWidth() / 2.0f, (float) this->zoo->getHeight() / 2.0f);
+  }
 }
 
 // The corner height grid is the average of the heights of the tiles
@@ -93,8 +144,7 @@ float MapView::cornerHeight(uint32_t x, uint32_t y) {
 }
 
 void MapView::lookAtTile(float tile_x, float tile_y) {
-  this->camera_x = (tile_x - tile_y) * TILE_HALF_WIDTH;
-  this->camera_y = (tile_x + tile_y) * TILE_HALF_HEIGHT;
+  this->tileToWorld(tile_x, tile_y, &this->camera_x, &this->camera_y);
 }
 
 bool MapView::handleInputs(std::vector<Input> &inputs) {
@@ -194,8 +244,10 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         uint32_t cx = tile_x + corner_offsets[i][0];
         uint32_t cy = tile_y + corner_offsets[i][1];
         corner_h[i] = this->cornerHeight(cx, cy);
-        float world_x = ((float) cx - (float) cy) * TILE_HALF_WIDTH;
-        float world_y = ((float) cx + (float) cy) * TILE_HALF_HEIGHT - corner_h[i] * HEIGHT_STEP;
+        float world_x;
+        float world_y;
+        this->tileToWorld((float) cx, (float) cy, &world_x, &world_y);
+        world_y -= corner_h[i] * HEIGHT_STEP;
         corners[i].x = (world_x - this->camera_x) * this->zoom + center_x;
         corners[i].y = (world_y - this->camera_y) * this->zoom + center_y;
         if (corners[i].x > -100.0f && corners[i].x < window_rect->w + 100.0f &&
@@ -248,28 +300,56 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   this->drawObjects(renderer, window_rect, center_x, center_y);
 }
 
+// The rotation field steps in increments of 2 per quarter turn. The ring is
+// in clockwise screen order, so rotating the map by a quarter turn shifts
+// which direction art a facing needs by one step.
+std::string MapView::rotationDirection(uint32_t rotation) {
+  const char * directions[4] = {"SE", "SW", "NW", "NE"};
+  return directions[((rotation / 2) + 4 - (uint32_t) this->orientation) % 4];
+}
+
 // Art locations differ per category: plain objects have an idle animation
 // under objects/<code>, fences have one animation per direction and paths
-// have numbered shape pieces
+// have numbered shape pieces picked by which neighbors are also paths
 Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw_key) {
   std::string cache_key;
   std::string animation_path;
   if (object->category == "fences") {
-    // Rotation 0 and 4 run along the x axis, 2 and 6 along the y axis
-    const char * directions[4] = {"NE", "SE", "SW", "NW"};
-    draw_key = directions[(object->rotation / 2) % 4];
+    // Fence pieces sit on tile edges at half tile positions and their
+    // rotation ring is one step behind the object one: 0 is the NE facing
+    // piece of an x axis run, 6 the SE facing piece of a y axis run
+    draw_key = rotationDirection(object->rotation + 6);
     animation_path = "fences/" + object->subcategory + "/" + object->code + "/idle/idle";
     cache_key = animation_path;
   } else if (object->category == "paths") {
-    // Path pieces are numbered shapes, the basic full piece is 1
-    draw_key = "1";
+    // Piece 5 is the isolated piece, the 16 neighbor combinations follow
+    // it. The mask bits are in screen directions, so each neighbor's bit
+    // depends on where the map orientation puts it on screen. The bit per
+    // screen direction in the SE, SW, NW, NE ring:
+    static const int screen_direction_bit[4] = {2, 4, 8, 1};
+    uint32_t tile_x = object->x / 64;
+    uint32_t tile_y = object->y / 64;
+    int mask = 0;
+    if (tile_y > 0 && this->path_tiles.contains(((uint64_t) tile_x << 32) | (tile_y - 1))) {
+      mask |= screen_direction_bit[(3 + 4 - this->orientation) % 4];
+    }
+    if (this->path_tiles.contains(((uint64_t) (tile_x + 1) << 32) | tile_y)) {
+      mask |= screen_direction_bit[(0 + 4 - this->orientation) % 4];
+    }
+    if (this->path_tiles.contains(((uint64_t) tile_x << 32) | (tile_y + 1))) {
+      mask |= screen_direction_bit[(1 + 4 - this->orientation) % 4];
+    }
+    if (tile_x > 0 && this->path_tiles.contains(((uint64_t) (tile_x - 1) << 32) | tile_y)) {
+      mask |= screen_direction_bit[(2 + 4 - this->orientation) % 4];
+    }
+    draw_key = std::to_string(5 + mask);
     animation_path = "paths/" + object->code + "/idle/idle";
     cache_key = animation_path;
   } else if (object->category == "ambient") {
     // Ambient markers are sound emitters without art
     return nullptr;
   } else {
-    draw_key = "";
+    draw_key = rotationDirection(object->rotation);
     animation_path = "objects/" + object->code + "/idle/idle";
     cache_key = animation_path;
   }
@@ -289,8 +369,9 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     // Positions are in 64ths of a tile
     float tile_x = (float) object->x / 64.0f;
     float tile_y = (float) object->y / 64.0f;
-    float world_x = (tile_x - tile_y) * TILE_HALF_WIDTH;
-    float world_y = (tile_x + tile_y) * TILE_HALF_HEIGHT;
+    float world_x;
+    float world_y;
+    this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
     // Anchor the sprite at the terrain height of its tile
     uint32_t corner_x = (uint32_t) tile_x;
     uint32_t corner_y = (uint32_t) tile_y;
@@ -308,18 +389,29 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     if (animation == nullptr) {
       continue;
     }
+    // Anchor the sprite by the box its ani file declares around the world
+    // anchor point, falling back to bottom center for art without one.
+    // Fence pieces still use the fallback until per frame offsets are
+    // implemented, their boxes leave gaps between the pieces.
+    float box_x0 = 0.0f;
+    float box_y0 = 0.0f;
     float sprite_width = 0.0f;
     float sprite_height = 0.0f;
-    if (!draw_key.empty()) {
-      if (!animation->getSizeByKey(draw_key, &sprite_width, &sprite_height)) {
+    if (object->category == "fences" ||
+        !animation->getBox(&box_x0, &box_y0, &sprite_width, &sprite_height)) {
+      if (!draw_key.empty()) {
+        if (!animation->getSizeByKey(draw_key, &sprite_width, &sprite_height)) {
+          continue;
+        }
+      } else if (!animation->getSize(&sprite_width, &sprite_height)) {
         continue;
       }
-    } else if (!animation->getSize(&sprite_width, &sprite_height)) {
-      continue;
+      box_x0 = -sprite_width / 2.0f;
+      box_y0 = -sprite_height;
     }
     SDL_FRect destination = {
-      screen_x - sprite_width * this->zoom / 2.0f,
-      screen_y - sprite_height * this->zoom,
+      screen_x + box_x0 * this->zoom,
+      screen_y + box_y0 * this->zoom,
       sprite_width * this->zoom,
       sprite_height * this->zoom,
     };
