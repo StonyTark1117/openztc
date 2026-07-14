@@ -39,10 +39,10 @@ UiImage::~UiImage() {
     SDL_DestroyTexture(this->image);
   }
   if (this->animation) {
-    free(animation);
+    delete animation;
   }
   for (UiElement * child : this->children) {
-    free(child);
+    delete child;
   }
 }
 

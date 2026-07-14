@@ -32,7 +32,7 @@ UiText::UiText(IniReader * ini_reader, ResourceManager * resource_manager, std::
 UiText::~UiText() {
   SDL_DestroyTexture(text);
   for (UiElement * child : this->children) {
-    free(child);
+    delete child;
   }
 }
 

@@ -21,10 +21,10 @@ UiLayout::UiLayout(IniReader *ini_reader, ResourceManager *resource_manager, std
 
 UiLayout::~UiLayout() {
     for (UiElement * element : this->children) {
-      free(element);
+      delete element;
     }
     if (this->ini_reader != nullptr) {
-      free(this->ini_reader);
+      delete this->ini_reader;
     }
 }
 

@@ -36,8 +36,11 @@ UiButton::UiButton(IniReader * ini_reader, ResourceManager * resource_manager, s
 
 UiButton::~UiButton() {
   SDL_DestroyTexture(text);
+  if (this->animation) {
+    delete animation;
+  }
   for (UiElement * child : this->children) {
-    free(child);
+    delete child;
   }
 }
 

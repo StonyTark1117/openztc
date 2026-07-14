@@ -9,7 +9,7 @@ GameManager::GameManager(ResourceManager * resource_manager) {
 
 GameManager::~GameManager() {
   for(auto kv : layouts) {
-    free(kv.second);
+    delete kv.second;
     layouts[kv.first] = nullptr;
   }
 }
@@ -129,7 +129,7 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
     }
   }
   this->loaded = true;
-  free(ini_reader);
+  delete ini_reader;
   *is_done = true;
 }
 
