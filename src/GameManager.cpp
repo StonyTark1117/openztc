@@ -182,6 +182,11 @@ void GameManager::loadScenarioList() {
       // Scenarios without a name, like freeform.scn, are not shown in the list
       continue;
     }
+    if (scenario_file == "scenario/scn02/scn02.scn" && name_id == 16001) {
+      // Every shipped version of scn02.scn claims the Tutorial 2 name, but
+      // the original game shows it as Tutorial 3
+      name_id = 16002;
+    }
     std::string scenario_name = this->resource_manager->getString(name_id);
     if (scenario_name.empty()) {
       continue;
