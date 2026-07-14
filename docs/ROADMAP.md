@@ -1,6 +1,6 @@
-# Roadmap and architecture
+# OpenZTC roadmap and architecture
 
-This fork is developed as its own project. We do not send changes upstream;
+OpenZTC is developed as its own project. We do not send changes upstream;
 upstream improvements can still be merged in when useful.
 
 ## Where the project stands (July 2026)
@@ -112,18 +112,63 @@ bytes. That loop is our reverse-engineering engine.
 
 ## Milestones
 
-1. **Hardening (before gameplay)** — module split (`engine/` resources,
-   render, input; `ui/`; `game/` simulation), fixed-timestep main loop,
-   GameAction bus skeleton, unit test scaffolding, sanitizer CI job.
-2. **`.zoo` reader** — parse header/terrain/exhibits/objects for all ~40
-   shipped maps without error; a `dumpzoo` dev tool; tests.
-3. **Terrain renderer** (`ZTMapView` v1) — isometric heightmapped terrain
-   with camera pan/zoom and culling, loaded from a real map, compared
-   side-by-side against the original under Wine.
-4. **Objects on the map** — fences, buildings, foliage rendered through the
-   existing `.ani` pipeline; the freeform screen's Play button loads its map.
-5. **Simulation skeleton** — fixed tick, money from `economy.cfg`, guests
-   spawning and pathing; animals as data-driven agents from the `.uca`
-   config family. Iterative from here.
-6. **Interaction** — build tools and terrain editing as GameActions.
-7. **Later** — save writing, oversized maps switch, multiplayer transport.
+Each milestone has an acceptance test. A milestone is done when its test
+passes, not before.
+
+### 1. Hardening (before any gameplay code)
+
+- Split `src/` into `src/engine/` (resources, formats, window, input,
+  cursors, fonts), `src/ui/` (unchanged) and `src/game/` (screens,
+  simulation).
+- Fixed-timestep main loop: render as fast as allowed, simulate at a fixed
+  tick through an accumulator. The simulation object owns a tick counter
+  and a single seeded RNG.
+- `GameAction` command bus skeleton: a serializable struct, a queue on the
+  simulation, actions applied only at tick boundaries. The UI never mutates
+  game state directly.
+- Unit test scaffolding (doctest) with a `tests` build target and the first
+  tests for `IniReader`.
+- CI: a Debug job with AddressSanitizer/UBSan that runs the tests.
+- *Acceptance*: menu works as before; tests green in CI with sanitizers.
+
+### 2. The `.zoo` reader
+
+- `src/engine/ZooFile.*`: header, terrain stream, exhibits, objects, with
+  unknowns preserved as opaque blobs.
+- A `dumpzoo` developer tool that prints a summary of any `.zoo` file.
+- Byte-diff research loop against saves made in the real game under Wine
+  for the undocumented sections.
+- *Acceptance*: all shipped maps (~40, all three sizes and all five header
+  variants) parse without error; unit tests lock the header/terrain layout.
+
+### 3. Terrain rendering (ZTMapView v1)
+
+- Isometric heightmapped terrain from parsed maps: tile sprites by terrain
+  type, height steps, edge cliffs; camera pan and zoom with culling.
+- The freeform screen's Play button loads the selected map into the view.
+- *Acceptance*: side-by-side screenshot of the same map in OpenZTC and the
+  original under Wine is recognizably the same terrain.
+
+### 4. Objects on the map
+
+- Fences, buildings, paths and foliage from the object records, rendered
+  through the existing `.ani` pipeline with correct isometric sort order.
+- *Acceptance*: a vanilla map renders with its placed content and stays
+  above 60 fps at normal zoom.
+
+### 5. Simulation skeleton
+
+- Fixed-tick world state: money (from `economy.cfg`), a clock/calendar,
+  guests spawning at the gate and pathing on paths, animals as data-driven
+  agents from the `.uca`/`.ucb`/`.ucs` config family. Iterative from here
+  on; this milestone only needs guests to walk and money to tick.
+
+### 6. Interaction
+
+- Build tools (paths, fences, terrain painting) emitting GameActions;
+  placement rules and costs.
+
+### 7. Later
+
+- Save writing (round-trip a vanilla save), oversized custom maps,
+  multiplayer transport on the GameAction bus, mod loading conveniences.
