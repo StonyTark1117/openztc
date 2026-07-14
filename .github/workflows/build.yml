@@ -17,20 +17,20 @@ jobs:
           submodules: recursive
       - name: Build
         run: |
-          mkdir zt1-engine && cd zt1-engine
+          mkdir openztc && cd openztc
           cmake -DCMAKE_BUILD_TYPE=Release -DSDL_X11=OFF ..
           cmake --build .
-          strip --strip-unneeded zt1-engine
+          strip --strip-unneeded openztc
           cp ../LICENSE.txt ../README.md ./
       - name: Publish artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: zt1-engine-linux
+          name: openztc-linux
           path: |
-            zt1-engine/zt1-engine
-            zt1-engine/font
-            zt1-engine/LICENSE.txt
-            zt1-engine/README.md
+            openztc/openztc
+            openztc/font
+            openztc/LICENSE.txt
+            openztc/README.md
 
   Windows:
     runs-on: windows-latest
@@ -60,22 +60,22 @@ jobs:
           submodules: recursive
       - name: Build
         run: |
-          mkdir zt1-engine && cd zt1-engine
+          mkdir openztc && cd openztc
           cmake -DCMAKE_BUILD_TYPE=Release ..
           cmake --build .
-          strip --strip-unneeded zt1-engine.exe
-          ldd zt1-engine.exe | grep /mingw64 | awk '{print $3}' | xargs -i cp {} .
+          strip --strip-unneeded openztc.exe
+          ldd openztc.exe | grep /mingw64 | awk '{print $3}' | xargs -i cp {} .
           cp ../LICENSE.txt ../README.md ./
       - name: Publish artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: zt1-engine-windows
+          name: openztc-windows
           path: |
-            zt1-engine/zt1-engine.exe
-            zt1-engine/*.dll
-            zt1-engine/font
-            zt1-engine/LICENSE.txt
-            zt1-engine/README.md
+            openztc/openztc.exe
+            openztc/*.dll
+            openztc/font
+            openztc/LICENSE.txt
+            openztc/README.md
 
   Release:
     needs: [Linux, Windows]
@@ -88,13 +88,13 @@ jobs:
     - uses: actions/download-artifact@v8
     - name: Zip artifacts
       run: |
-        zip -r zt1-engine-${{matrix.build}}.zip zt1-engine-${{matrix.build}}
+        zip -r openztc-${{matrix.build}}.zip openztc-${{matrix.build}}
     - name: Release
       uses: softprops/action-gh-release@v2.4.2
       with:
-        files: zt1-engine-${{matrix.build}}.zip
+        files: openztc-${{matrix.build}}.zip
         prerelease: true
-        name: zt1-engine ${{ github.ref_name }}
+        name: openztc ${{ github.ref_name }}
         tag_name: ${{ github.ref_name }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

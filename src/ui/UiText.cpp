@@ -27,7 +27,7 @@ UiText::UiText(IniReader * ini_reader, ResourceManager * resource_manager, std::
 
   if(this->text_string.empty()) {
     if (this->id == 7119) {
-      this->text_string = "Version Number: ZT1-Engine 0.1  ";
+      this->text_string = "Version Number: OpenZTC 0.1  ";
     } else {
       this->text_string = "Not found";
     }

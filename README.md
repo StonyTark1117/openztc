@@ -1,64 +1,45 @@
-# ZT1-Engine
+# OpenZTC
 
-ZT1-Engine is an open source engine for Zoo Tycoon 1 that is still very much work in progress.
+OpenZTC is an open source engine for Zoo Tycoon (2001), in the spirit of
+OpenRCT2: a modern, 64-bit, cross-platform engine distributed without any
+copyrighted game assets. You provide the data files from your own copy of
+the game.
 
-Currently it has the following features:
-- Read `zoo.ini`.
-- Display the loading screen.
-- Map the resources found in ztd files.
-- Map the strings found in lang*.dll files.
-- Load the intro music.
-- Display the main menu.
-- Load and display animations.
+It began as a fork of [ZT1-Engine](https://github.com/sharkwouter/zt1-engine)
+by Wouter (sharkwouter) Wijsman and is now developed independently.
 
-Please do not use this unless you want to help make an open source engine for Zoo Tycoon a reality. This is very far from playable.
+Current state:
+- Reads `zoo.ini`, the `.ztd` archives, the `lang*.dll` string tables and
+  the custom `.ani` graphics format, including expansion pack overrides.
+- Complete main menu: credits, scenario selection (story, objectives,
+  pictures) and freeform map selection (descriptions, previews, starting
+  cash and difficulty).
+- The game's own cursors, fonts, music and localized strings.
+
+Gameplay does not exist yet. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
+plan, including the `.zoo` save format, larger custom maps and the
+multiplayer-ready simulation architecture.
 
 ## Building
 
-To build ZT1-Engine can be build with the following command:
-
 ```
-git clone --recurse-submodules --remote-submodules https://github.com/sharkwouter/zt1-engine.git
-cd zt1-engine
+git clone --recurse-submodules https://github.com/StonyTark1117/openztc.git
+cd openztc
 mkdir build
 cd build
-cmake ..
-make
+cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake --build .
 ```
 
-Now copy all the Zoo Tycoon files into the `zt1-engine/build` directory.
-
-The engine can be started by double clicking zt1-engine or running it like this from the terminal:
-
-```
-./zt1-engine
-```
+Copy (or symlink) the files from your Zoo Tycoon installation into the
+`build` directory, or start `./openztc` and pick the folder when asked.
 
 ## License
 
-ZT1-Engine is available under the following MIT license:
-
-```
-Copyright (c) 2025 Wouter (sharkwouter) Wijsman
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+OpenZTC is available under the MIT license, see [LICENSE.txt](LICENSE.txt).
+It retains the copyright of the original ZT1-Engine it was forked from.
+The bundled Aileron fonts are CC0. The icon uses
+[a picture from Magda Ehlers from Pexels](https://www.pexels.com/photo/zebra-s-eye-760958/).
 
 # Third Party Licenses
 

@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
   InputManager input_manager;
   std::vector<Input> inputs;
 
-  Window window("ZT1-Engine", config.getScreenWidth(), config.getScreenHeight(), 60.0f);
+  Window window("OpenZTC", config.getScreenWidth(), config.getScreenHeight(), 60.0f);
   CursorManager cursor_manager(&resource_manager);
   cursor_manager.setCursor(CursorRole::DEFAULT);
   GameManager game_manager(&resource_manager, &cursor_manager);
