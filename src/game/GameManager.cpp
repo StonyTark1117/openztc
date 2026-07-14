@@ -2,6 +2,7 @@
 
 #include <string>
 #include <algorithm>
+#include <tuple>
 
 #include "../ui/UiListBox.hpp"
 #include "../ui/UiImage.hpp"
@@ -176,34 +177,43 @@ void GameManager::loadScenarioList() {
     return;
   }
 
-  std::vector<std::string> scenario_files = this->resource_manager->getResourceNamesWithExtension("SCN");
-  std::sort(scenario_files.begin(), scenario_files.end());
+  // The scenario list is data driven: every cfg section with a scenario
+  // key is one entry, carrying its display name id. The two letter section
+  // names order the combined list across the base game, expansions and
+  // updates: a* are the tutorials, b* to g* the difficulty groups. Using
+  // the cfg name also shows scn02 as Tutorial 3 even though the scn file
+  // claims the Tutorial 2 name.
+  std::vector<std::string> config_files = this->resource_manager->getResourceNamesWithExtension("CFG");
+  std::sort(config_files.begin(), config_files.end());
+
+  // Section name, display name id and scenario file per entry
+  std::vector<std::tuple<std::string, uint32_t, std::string>> entries;
+  for (const std::string &config_file : config_files) {
+    IniReader * config_reader = this->resource_manager->getIniReader(config_file);
+    if (config_reader == nullptr) {
+      continue;
+    }
+    for (std::string section : config_reader->getSections()) {
+      std::string scenario_file = config_reader->get(section, "scenario");
+      if (scenario_file.empty()) {
+        continue;
+      }
+      entries.push_back({section, config_reader->getUnsignedInt(section, "name", 0), scenario_file});
+    }
+    delete config_reader;
+  }
+  std::sort(entries.begin(), entries.end());
 
   std::vector<std::string> scenario_names;
   this->scenarios.clear();
-  for (std::string scenario_file : scenario_files) {
-    // Skip the test scenarios which shipped with the game but are not shown
-    if (scenario_file.starts_with("scenario/example") ||
-        scenario_file.starts_with("scenario/mstest") ||
-        scenario_file.starts_with("scenario/4is")) {
-      continue;
-    }
+  for (const auto &[section, cfg_name_id, scenario_file] : entries) {
     IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
     if (scenario_reader == nullptr) {
       continue;
     }
-    uint32_t name_id = scenario_reader->getUnsignedInt("desc", "name", 0);
+    uint32_t name_id = cfg_name_id != 0 ? cfg_name_id : scenario_reader->getUnsignedInt("desc", "name", 0);
     std::string picture = scenario_reader->get("desc", "picture");
     delete scenario_reader;
-    if (name_id == 0) {
-      // Scenarios without a name, like freeform.scn, are not shown in the list
-      continue;
-    }
-    if (scenario_file == "scenario/scn02/scn02.scn" && name_id == 16001) {
-      // Every shipped version of scn02.scn claims the Tutorial 2 name, but
-      // the original game shows it as Tutorial 3
-      name_id = 16002;
-    }
     std::string scenario_name = this->resource_manager->getString(name_id);
     if (scenario_name.empty()) {
       continue;
@@ -325,12 +335,29 @@ void GameManager::loadFreeformMapList() {
     return;
   }
 
-  std::vector<std::string> scenario_files = this->resource_manager->getResourceNamesWithExtension("SCN");
-  std::sort(scenario_files.begin(), scenario_files.end());
+  // The maps come from the freeform lists in the cfg files, in resource
+  // name order: the expansion lists freefo01/freefo02 and then the base
+  // game freeform.cfg. The original only shows the last 33 entries of this
+  // sequence because they overflow a fixed size list, which hides the
+  // Dinosaur Digs maps and most small Marine Mania maps; we show them all.
+  std::vector<std::string> config_files = this->resource_manager->getResourceNamesWithExtension("CFG");
+  std::sort(config_files.begin(), config_files.end());
+
+  std::vector<std::string> map_files;
+  for (const std::string &config_file : config_files) {
+    IniReader * config_reader = this->resource_manager->getIniReader(config_file);
+    if (config_reader == nullptr) {
+      continue;
+    }
+    for (std::string map_file : config_reader->getList("freeform", "freeform")) {
+      map_files.push_back(map_file);
+    }
+    delete config_reader;
+  }
 
   std::vector<std::string> map_names;
   this->freeform_maps.clear();
-  for (std::string scenario_file : scenario_files) {
+  for (std::string scenario_file : map_files) {
     IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
     if (scenario_reader == nullptr) {
       continue;
@@ -339,10 +366,6 @@ void GameManager::loadFreeformMapList() {
     std::string icon = scenario_reader->get("freeform", "icon");
     std::string savegame = scenario_reader->get("start", "savegame");
     delete scenario_reader;
-    if (name_id == 0) {
-      // Only scenarios with a freeform section are maps
-      continue;
-    }
     std::string map_name = this->resource_manager->getString(name_id);
     if (map_name.empty()) {
       continue;
