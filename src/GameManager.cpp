@@ -165,6 +165,12 @@ void GameManager::loadScenarioList() {
   std::vector<std::string> scenario_names;
   this->scenarios.clear();
   for (std::string scenario_file : scenario_files) {
+    // Skip the test scenarios which shipped with the game but are not shown
+    if (scenario_file.starts_with("scenario/example") ||
+        scenario_file.starts_with("scenario/mstest") ||
+        scenario_file.starts_with("scenario/4is")) {
+      continue;
+    }
     IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
     if (scenario_reader == nullptr) {
       continue;
@@ -229,6 +235,7 @@ void GameManager::showSelectedScenario() {
         uint32_t text_id = scenario_reader->getUnsignedInt("duration", "text", 0);
         std::string objective_text = this->resource_manager->getString(text_id);
         if (!objective_text.empty()) {
+          fillObjectivePlaceholder(objective_text, scenario_reader->getInt("duration", "nummonths", 0));
           objective_texts.push_back(objective_text);
         }
       }
@@ -239,12 +246,23 @@ void GameManager::showSelectedScenario() {
         }
         std::string objective_text = this->resource_manager->getString(text_id);
         if (!objective_text.empty()) {
+          fillObjectivePlaceholder(objective_text, scenario_reader->getInt(goal, "value", 0));
           objective_texts.push_back(objective_text);
         }
       }
       delete scenario_reader;
     }
     objectives->setItems(objective_texts);
+  }
+}
+
+// Replaces the first %d in an objective text with the goal value. Texts with
+// multiple placeholders keep the remaining ones, since it is not known yet
+// which goal keys they refer to.
+void GameManager::fillObjectivePlaceholder(std::string &text, int value) {
+  size_t placeholder = text.find("%d");
+  if (placeholder != std::string::npos) {
+    text = text.substr(0, placeholder) + std::to_string(value) + text.substr(placeholder + 2);
   }
 }
 
@@ -258,6 +276,15 @@ void GameManager::showSelectedScenario() {
 #define STARTING_CASH_ID 11510
 #define CASH_UP_SPINNER_ID 11511
 #define CASH_DOWN_SPINNER_ID 11512
+#define DIFFICULTY_TEXT_ID 11531
+
+// The difficulty strings in the lang dlls. Which starting cash amounts they
+// correspond to is not in the game data, so the thresholds are defined here.
+#define DIFFICULTY_EASY_STRING_ID 11536
+#define DIFFICULTY_INTERMEDIATE_STRING_ID 11537
+#define DIFFICULTY_HARD_STRING_ID 11538
+#define DIFFICULTY_EASY_MINIMUM_CASH 45000
+#define DIFFICULTY_INTERMEDIATE_MINIMUM_CASH 20000
 
 // The starting cash of scenario/freeform.scn, used when a map does not set
 // its own. The step and limits used by the spinners are not in the game
@@ -361,6 +388,18 @@ void GameManager::updateStartingCashText() {
     cash_string.insert(position, ",");
   }
   cash_text->setText("$" + cash_string);
+
+  // The difficulty follows from the chosen starting cash
+  UiText * difficulty = dynamic_cast<UiText*>(this->layouts[FREEFORM_LAYOUT_NAME]->getChildWithId(DIFFICULTY_TEXT_ID));
+  if (difficulty != nullptr) {
+    uint32_t difficulty_string_id = DIFFICULTY_HARD_STRING_ID;
+    if (this->starting_cash >= DIFFICULTY_EASY_MINIMUM_CASH) {
+      difficulty_string_id = DIFFICULTY_EASY_STRING_ID;
+    } else if (this->starting_cash >= DIFFICULTY_INTERMEDIATE_MINIMUM_CASH) {
+      difficulty_string_id = DIFFICULTY_INTERMEDIATE_STRING_ID;
+    }
+    difficulty->setText(this->resource_manager->getString(difficulty_string_id));
+  }
 }
 
 // The credits screen consists of multiple page layouts which the original

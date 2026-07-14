@@ -56,6 +56,7 @@ private:
   void showSelectedFreeformMap();
   void changeStartingCash(int amount);
   void updateStartingCashText();
+  void fillObjectivePlaceholder(std::string &text, int value);
 };
 
 #endif // GAME_MANAGER_HPP
