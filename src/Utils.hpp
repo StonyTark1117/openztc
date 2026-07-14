@@ -92,8 +92,8 @@ public:
   }
 
   static std::string fixPath(std::string path_string) {
-    if (path_string.ends_with("/")) {
-      // Remove final slash, otherwise the next part fails
+    while (path_string.ends_with("/")) {
+      // Remove final slashes, otherwise the next part fails
       path_string = path_string.substr(0, path_string.length() - 1);
     }
     std::filesystem::path path = std::filesystem::path(path_string);
@@ -103,7 +103,7 @@ public:
       new_path =  std::filesystem::path(Utils::getZooTycoonPath());
     }
     for (std::filesystem::path part : path) {
-      if (part == "/" || part == ".") {
+      if (part == "/" || part == "." || part.empty()) {
         continue;
       }
       std::string new_part = Utils::getCorrectCaseFilename(new_path.string(), part.string());
