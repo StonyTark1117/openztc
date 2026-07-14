@@ -9,17 +9,20 @@
 #include "../IniReader.hpp"
 #include "../Animation.hpp"
 #include "../ResourceManager.hpp"
+#include "../CursorManager.hpp"
 #include "../CompassDirection.hpp"
 
 class UiButton : public UiElement {
 public:
-  UiButton(IniReader * ini_reader, ResourceManager * resource_manager, std::string name);
+  UiButton(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager, std::string name);
   ~UiButton();
 
   UiAction handleInputs(std::vector<Input> &inputs);
   void draw(SDL_Renderer * renderer, SDL_FRect * layout_rect);
 
 private:
+  void setCursor(CursorRole role);
+
   std::string text_string = "";
   SDL_Texture * text = nullptr;
   SDL_Texture * shadow = nullptr;

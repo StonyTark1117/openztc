@@ -5,8 +5,9 @@
 
 #include "ui/UiListBox.hpp"
 
-GameManager::GameManager(ResourceManager * resource_manager) {
+GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->resource_manager = resource_manager;
+  this->cursor_manager = cursor_manager;
 }
 
 GameManager::~GameManager() {
@@ -117,7 +118,7 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
           // infocomC.lyt is the only lyt file that has a capital letter in the name
           std::transform(layout.begin(), layout.end(), layout.begin(), ::tolower);
         }
-        this->layouts[section] = new UiLayout(ini_reader, resource_manager, section);
+        this->layouts[section] = new UiLayout(ini_reader, resource_manager, cursor_manager, section);
       } else {
         // TODO: Implement support for ZTMapView, ZTMessageQueue and UIText here
         SDL_Log("Cannot load elements of type %s in layout manager yet, not implemented", type.c_str());

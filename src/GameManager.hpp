@@ -7,12 +7,13 @@
 
 #include "IniReader.hpp"
 #include "ResourceManager.hpp"
+#include "CursorManager.hpp"
 #include "ui/UiLayout.hpp"
 #include "ui/UiAction.hpp"
 
 class GameManager {
 public:
-  GameManager(ResourceManager * resource_manager);
+  GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager);
   ~GameManager();
 
   bool HandleInputs(std::vector<Input> &inputs);
@@ -25,6 +26,7 @@ private:
   int id = 0;
   bool loaded = false;
   ResourceManager * resource_manager = nullptr;
+  CursorManager * cursor_manager = nullptr;
 
   size_t credits_page = 0;
   uint64_t credits_page_start = 0;

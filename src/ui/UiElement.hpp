@@ -15,6 +15,8 @@
 
 #define FONT_SIZE 24
 
+class CursorManager;
+
 class UiElement {
 public:
   virtual ~UiElement() {};
@@ -109,6 +111,7 @@ public:
 protected:
   IniReader * ini_reader = nullptr;
   ResourceManager * resource_manager = nullptr;
+  CursorManager * cursor_manager = nullptr;
   std::string name;
   int id = 0;
   int layer = 0;

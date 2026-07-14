@@ -2,9 +2,10 @@
 
 #include "../CompassDirection.hpp"
 
-UiButton::UiButton(IniReader * ini_reader, ResourceManager * resource_manager, std::string name) {
+UiButton::UiButton(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager, std::string name) {
   this->ini_reader = ini_reader;
   this->resource_manager = resource_manager;
+  this->cursor_manager = cursor_manager;
   this->name = name;
 
   this->id = ini_reader->getInt(name, "id");
@@ -53,6 +54,7 @@ UiAction UiButton::handleInputs(std::vector<Input> &inputs) {
     if (input.position.x < this->draw_rect.x || input.position.x > this->draw_rect.x + this->draw_rect.w) {
       if (this->selected) {
         this->selected_updated = true;
+        this->setCursor(CursorRole::DEFAULT);
       }
       this->selected = false;
       continue;
@@ -60,6 +62,7 @@ UiAction UiButton::handleInputs(std::vector<Input> &inputs) {
     if (input.position.y < this->draw_rect.y || input.position.y > this->draw_rect.y + this->draw_rect.h) {
       if (this->selected) {
         this->selected_updated = true;
+        this->setCursor(CursorRole::DEFAULT);
       }
       this->selected = false;
       continue;
@@ -73,6 +76,10 @@ UiAction UiButton::handleInputs(std::vector<Input> &inputs) {
       case InputEvent::LEFT_CLICK:
         result = {this->action, this->target, this->id};
         this->selected = false;
+        this->setCursor(CursorRole::DEFAULT);
+        break;
+      case InputEvent::CURSOR_MOVE:
+        this->setCursor(CursorRole::HOVER);
         break;
       default:
         break;
@@ -82,6 +89,12 @@ UiAction UiButton::handleInputs(std::vector<Input> &inputs) {
     result = handleInputChildren(inputs);
   }
   return result;
+}
+
+void UiButton::setCursor(CursorRole role) {
+  if (this->cursor_manager != nullptr) {
+    this->cursor_manager->setCursor(role);
+  }
 }
 
 void UiButton::draw(SDL_Renderer * renderer, SDL_FRect * layout_rect) {

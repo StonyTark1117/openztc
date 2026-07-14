@@ -8,16 +8,18 @@
 #include "UiListBox.hpp"
 #include "UiScrollBar.hpp"
 
-UiLayout::UiLayout(IniReader * ini_reader, ResourceManager * resource_manager) {
+UiLayout::UiLayout(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->ini_reader = ini_reader;
   this->resource_manager = resource_manager;
+  this->cursor_manager = cursor_manager;
   this->process_sections();
 }
 
-UiLayout::UiLayout(IniReader *ini_reader, ResourceManager *resource_manager, std::string name) {
+UiLayout::UiLayout(IniReader *ini_reader, ResourceManager *resource_manager, CursorManager * cursor_manager, std::string name) {
   this->name = name;
   this->active = ini_reader->getInt(this->name, "state", 0) != 1;
   this->resource_manager = resource_manager;
+  this->cursor_manager = cursor_manager;
   this->process_layout(ini_reader->get(this->name, "layout"));
 }
 
@@ -49,11 +51,11 @@ void UiLayout::process_sections() {
     } else if (element_type == "UIImage") {
       this->children.push_back((UiElement *) new UiImage(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UIButton") {
-      this->children.push_back((UiElement *) new UiButton(this->ini_reader, this->resource_manager, section));
+      this->children.push_back((UiElement *) new UiButton(this->ini_reader, this->resource_manager, this->cursor_manager, section));
     } else if (element_type == "UIText") {
       this->children.push_back((UiElement *) new UiText(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UILayout") {
-      this->children.push_back((UiElement *) new UiLayout(this->ini_reader, this->resource_manager, section));
+      this->children.push_back((UiElement *) new UiLayout(this->ini_reader, this->resource_manager, this->cursor_manager, section));
     } else if (element_type == "UIListBox") {
       this->children.push_back((UiElement *) new UiListBox(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UIScrollBar") {
