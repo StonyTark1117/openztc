@@ -4,6 +4,7 @@
 #include "Config.hpp"
 #include "Window.hpp"
 #include "ResourceManager.hpp"
+#include "CursorManager.hpp"
 #include "LoadScreen.hpp"
 #include "InputManager.hpp"
 #include "Input.hpp"
@@ -16,12 +17,13 @@ int main(int argc, char **argv) {
 
   Config config;
   ResourceManager resource_manager(&config);
-  GameManager game_manager(&resource_manager);
   InputManager input_manager;
   std::vector<Input> inputs;
 
   Window window("ZT1-Engine", config.getScreenWidth(), config.getScreenHeight(), 60.0f);
-  window.set_cursor(resource_manager.getCursor(9));
+  CursorManager cursor_manager(&resource_manager);
+  cursor_manager.setCursor(CursorRole::DEFAULT);
+  GameManager game_manager(&resource_manager, &cursor_manager);
 
   LoadScreen::run(&window, &config, &resource_manager, &game_manager);
 
