@@ -52,6 +52,36 @@ bool Animation::getSize(float * w, float * h, CompassDirection direction) {
   return false;
 }
 
+bool Animation::getSizeByKey(const std::string &key, float * w, float * h) {
+  if (this->textures.contains(key) && !this->textures[key].empty()) {
+    return SDL_GetTextureSize(this->textures[key][0], w, h);
+  }
+  if (this->surfaces.contains(key) && !this->surfaces[key].empty()) {
+    *w = (float) this->surfaces[key][0]->w;
+    *h = (float) this->surfaces[key][0]->h;
+    return true;
+  }
+  return false;
+}
+
+void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key) {
+  if (!this->textures.contains(key) || this->textures[key].empty()) {
+    if (!this->surfaces.contains(key) || this->surfaces[key].empty()) {
+      return;
+    }
+    this->textures[key] = std::vector<SDL_Texture *>();
+    for (SDL_Surface * surface : this->surfaces[key]) {
+      this->textures[key].push_back(SDL_CreateTextureFromSurface(renderer, surface));
+      SDL_DestroySurface(surface);
+    }
+    this->surfaces[key].clear();
+  }
+  if (this->textures[key].empty() || this->textures[key][0] == nullptr) {
+    return;
+  }
+  SDL_RenderTexture(renderer, this->textures[key][0], NULL, dest_rect);
+}
+
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {
   // Resolve against the already converted textures first. Resolving against
   // the surfaces when a converted direction exists would overwrite its

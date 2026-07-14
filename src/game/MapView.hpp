@@ -23,6 +23,7 @@ public:
 
   bool loadMap(const std::string &zoo_file_name);
   void setZoom(float zoom) { this->zoom = zoom; }
+  void lookAtTile(float tile_x, float tile_y);
 
   // Returns false when the user wants to leave the map
   bool handleInputs(std::vector<Input> &inputs);
@@ -52,7 +53,7 @@ private:
 
   void loadTerrainTextures(SDL_Renderer * renderer);
   void drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y);
-  Animation * objectAnimation(const std::string &code);
+  Animation * objectAnimation(const ZooObject * object, std::string &draw_key);
   void buildCornerHeights();
   float cornerHeight(uint32_t x, uint32_t y);
 };

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "../engine/CompassDirection.hpp"
 #include "../engine/Utils.hpp"
 
 // Isometric tile size in pixels at zoom 1 and the pixel offset per height
@@ -89,6 +90,11 @@ void MapView::buildCornerHeights() {
 
 float MapView::cornerHeight(uint32_t x, uint32_t y) {
   return this->corner_heights[(size_t) y * (this->zoo->getWidth() + 1) + x];
+}
+
+void MapView::lookAtTile(float tile_x, float tile_y) {
+  this->camera_x = (tile_x - tile_y) * TILE_HALF_WIDTH;
+  this->camera_y = (tile_x + tile_y) * TILE_HALF_HEIGHT;
 }
 
 bool MapView::handleInputs(std::vector<Input> &inputs) {
@@ -242,15 +248,36 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   this->drawObjects(renderer, window_rect, center_x, center_y);
 }
 
-// The world animation of an object lives at objects/<code>/idle. Objects
-// without one, like paths and fences, have their own art layouts and are
-// not drawn yet.
-Animation * MapView::objectAnimation(const std::string &code) {
-  if (this->object_animations.contains(code)) {
-    return this->object_animations[code];
+// Art locations differ per category: plain objects have an idle animation
+// under objects/<code>, fences have one animation per direction and paths
+// have numbered shape pieces
+Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw_key) {
+  std::string cache_key;
+  std::string animation_path;
+  if (object->category == "fences") {
+    // Rotation 0 and 4 run along the x axis, 2 and 6 along the y axis
+    const char * directions[4] = {"NE", "SE", "SW", "NW"};
+    draw_key = directions[(object->rotation / 2) % 4];
+    animation_path = "fences/" + object->subcategory + "/" + object->code + "/idle/idle";
+    cache_key = animation_path;
+  } else if (object->category == "paths") {
+    // Path pieces are numbered shapes, the basic full piece is 1
+    draw_key = "1";
+    animation_path = "paths/" + object->code + "/idle/idle";
+    cache_key = animation_path;
+  } else if (object->category == "ambient") {
+    // Ambient markers are sound emitters without art
+    return nullptr;
+  } else {
+    draw_key = "";
+    animation_path = "objects/" + object->code + "/idle/idle";
+    cache_key = animation_path;
   }
-  Animation * animation = this->resource_manager->getAnimation("objects/" + code + "/idle/idle");
-  this->object_animations[code] = animation;
+  if (this->object_animations.contains(cache_key)) {
+    return this->object_animations[cache_key];
+  }
+  Animation * animation = this->resource_manager->getAnimation(animation_path);
+  this->object_animations[cache_key] = animation;
   if (animation == nullptr) {
     this->missing_object_art++;
   }
@@ -276,13 +303,18 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
         screen_y < -200.0f || screen_y > window_rect->h + 200.0f) {
       continue;
     }
-    Animation * animation = this->objectAnimation(object->code);
+    std::string draw_key;
+    Animation * animation = this->objectAnimation(object, draw_key);
     if (animation == nullptr) {
       continue;
     }
     float sprite_width = 0.0f;
     float sprite_height = 0.0f;
-    if (!animation->getSize(&sprite_width, &sprite_height)) {
+    if (!draw_key.empty()) {
+      if (!animation->getSizeByKey(draw_key, &sprite_width, &sprite_height)) {
+        continue;
+      }
+    } else if (!animation->getSize(&sprite_width, &sprite_height)) {
       continue;
     }
     SDL_FRect destination = {
@@ -291,6 +323,10 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
       sprite_width * this->zoom,
       sprite_height * this->zoom,
     };
-    animation->draw(renderer, &destination);
+    if (!draw_key.empty()) {
+      animation->drawByKey(renderer, &destination, draw_key);
+    } else {
+      animation->draw(renderer, &destination);
+    }
   }
 }

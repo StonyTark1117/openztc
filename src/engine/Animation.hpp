@@ -21,6 +21,8 @@ public:
     void draw(SDL_Renderer * renderer, float x, float y, CompassDirection direction=CompassDirection::N);
     void draw(SDL_Renderer * renderer, SDL_FRect * draw_rect, CompassDirection direction=CompassDirection::N);
     bool getSize(float * w, float * h, CompassDirection direction=CompassDirection::N);
+    bool getSizeByKey(const std::string &key, float * w, float * h);
+    void drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key);
 
     void queryTexture(CompassDirection direction, float * w, float * h);
 private:

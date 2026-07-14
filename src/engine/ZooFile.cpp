@@ -159,12 +159,14 @@ void ZooFile::parseObjects() {
       SDL_Log("Object %u data does not fit, stopping", i);
       break;
     }
-    if (remaining >= 12) {
+    if (remaining >= 20) {
       object.x = readUint32(data, position + 4);
       object.y = readUint32(data, position + 8);
+      object.rotation = readUint32(data, position + 16);
     } else {
       object.x = 0;
       object.y = 0;
+      object.rotation = 0;
     }
     position += remaining;
     this->objects.push_back(object);

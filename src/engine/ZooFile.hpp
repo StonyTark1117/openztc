@@ -22,6 +22,7 @@ typedef struct {
   std::string code;
   uint32_t x;
   uint32_t y;
+  uint32_t rotation;
 } ZooObject;
 
 // Reader for the zoo save/map format. The format starts with a TZFB magic
