@@ -209,6 +209,8 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
       }
       SDL_Texture * texture = this->resource_manager->getTexture(renderer, texture_name);
       if (texture != nullptr) {
+        // Boundary blending draws neighbor textures with vertex alpha
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
         this->terrain_textures[type] = texture;
       }
     }
@@ -231,9 +233,12 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   uint32_t height = this->zoo->getHeight();
 
   // Batch the tile quads per terrain texture to keep the draw call count
-  // independent of the map size
+  // independent of the map size. Boundary blending triangles go into their
+  // own batches, drawn after all the base tiles.
   std::unordered_map<int, std::vector<SDL_Vertex>> batches;
   std::unordered_map<int, std::vector<int>> batch_indices;
+  std::unordered_map<int, std::vector<SDL_Vertex>> blend_batches;
+  std::unordered_map<int, std::vector<int>> blend_indices;
 
   for (uint32_t tile_y = 0; tile_y < height; tile_y++) {
     for (uint32_t tile_x = 0; tile_x < width; tile_x++) {
@@ -291,6 +296,47 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       indices.push_back(base);
       indices.push_back(base + 2);
       indices.push_back(base + 3);
+
+      // Where a different terrain type borders this tile its texture
+      // bleeds in, fading from the shared edge to the tile center. Lower
+      // type numbers paint over higher ones so each boundary blends once.
+      SDL_FPoint tile_center = {
+        (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4.0f,
+        (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4.0f,
+      };
+      const int edge_corners[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
+      const int neighbor_offsets[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
+      for (int edge = 0; edge < 4; edge++) {
+        int neighbor_x = (int) tile_x + neighbor_offsets[edge][0];
+        int neighbor_y = (int) tile_y + neighbor_offsets[edge][1];
+        if (neighbor_x < 0 || neighbor_y < 0 || neighbor_x >= (int) width || neighbor_y >= (int) height) {
+          continue;
+        }
+        int neighbor_type = this->zoo->getTile(neighbor_x, neighbor_y).type;
+        if (neighbor_type >= tile.type || !this->terrain_textures.contains(neighbor_type)) {
+          continue;
+        }
+        std::vector<SDL_Vertex> &blend_vertices = blend_batches[neighbor_type];
+        std::vector<int> &blend_index_list = blend_indices[neighbor_type];
+        int blend_base = (int) blend_vertices.size();
+        SDL_FColor edge_color = {brightness, brightness, brightness, 0.85f};
+        SDL_FColor center_color = {brightness, brightness, brightness, 0.0f};
+        for (int i = 0; i < 2; i++) {
+          SDL_Vertex vertex;
+          vertex.position = corners[edge_corners[edge][i]];
+          vertex.color = edge_color;
+          vertex.tex_coord = texture_coordinates[edge_corners[edge][i]];
+          blend_vertices.push_back(vertex);
+        }
+        SDL_Vertex center_vertex;
+        center_vertex.position = tile_center;
+        center_vertex.color = center_color;
+        center_vertex.tex_coord = {0.5f, 0.5f};
+        blend_vertices.push_back(center_vertex);
+        blend_index_list.push_back(blend_base);
+        blend_index_list.push_back(blend_base + 1);
+        blend_index_list.push_back(blend_base + 2);
+      }
     }
   }
 
@@ -298,6 +344,10 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     SDL_Texture * texture = this->terrain_textures.contains(batch.first) ? this->terrain_textures[batch.first] : nullptr;
     SDL_RenderGeometry(renderer, texture, batch.second.data(), (int) batch.second.size(),
                        batch_indices[batch.first].data(), (int) batch_indices[batch.first].size());
+  }
+  for (auto &batch : blend_batches) {
+    SDL_RenderGeometry(renderer, this->terrain_textures[batch.first], batch.second.data(), (int) batch.second.size(),
+                       blend_indices[batch.first].data(), (int) blend_indices[batch.first].size());
   }
 
   this->drawObjects(renderer, window_rect, center_x, center_y);
