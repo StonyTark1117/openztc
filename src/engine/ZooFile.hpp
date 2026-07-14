@@ -14,6 +14,16 @@ typedef struct {
   uint8_t unknown[4];
 } ZooTerrainTile;
 
+// One placed object. Positions are in 64ths of a tile. Only the fields
+// needed for rendering are decoded, the rest of the record is kept raw.
+typedef struct {
+  std::string category;
+  std::string subcategory;
+  std::string code;
+  uint32_t x;
+  uint32_t y;
+} ZooObject;
+
 // Reader for the zoo save/map format. The format starts with a TZFB magic
 // followed by a variant byte which differs per game generation (F, G, S, R,
 // h, i, j have been seen in shipped maps). Header sizes vary per variant,
@@ -38,6 +48,7 @@ public:
 
   uint32_t getObjectCount() const { return this->object_count; }
   const std::vector<uint8_t> & getObjectSection() const { return this->object_section; }
+  const std::vector<ZooObject> & getObjects() const { return this->objects; }
 
 private:
   ZooFile() {}
@@ -49,6 +60,9 @@ private:
   std::vector<ZooTerrainTile> tiles;
   uint32_t object_count = 0;
   std::vector<uint8_t> object_section;
+  std::vector<ZooObject> objects;
+
+  void parseObjects();
 };
 
 #endif // ZOO_FILE_HPP

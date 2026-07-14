@@ -7,6 +7,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "../engine/Animation.hpp"
 #include "../engine/ResourceManager.hpp"
 #include "../engine/ZooFile.hpp"
 #include "../engine/Input.hpp"
@@ -34,6 +35,11 @@ private:
   std::unordered_map<int, SDL_Texture *> terrain_textures;
   bool textures_loaded = false;
 
+  // Objects sorted in paint order and their animations by object code
+  std::vector<const ZooObject *> sorted_objects;
+  std::unordered_map<std::string, Animation *> object_animations;
+  int missing_object_art = 0;
+
   // Camera offset in world pixels at zoom 1 and the zoom factor
   float camera_x = 0.0f;
   float camera_y = 0.0f;
@@ -45,6 +51,8 @@ private:
   std::vector<float> corner_heights;
 
   void loadTerrainTextures(SDL_Renderer * renderer);
+  void drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y);
+  Animation * objectAnimation(const std::string &code);
   void buildCornerHeights();
   float cornerHeight(uint32_t x, uint32_t y);
 };

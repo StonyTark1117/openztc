@@ -53,11 +53,13 @@ bool Animation::getSize(float * w, float * h, CompassDirection direction) {
 }
 
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {
-  std::string direction_string = convertCompassDirectionToString(direction);
-  if (!this->textures.contains(direction_string)) {
-    if (!this->surfaces.contains(direction_string)) {
-      direction_string = convertCompassDirectionToExistingAnimationString(direction, this->surfaces);
-    }
+  // Resolve against the already converted textures first. Resolving against
+  // the surfaces when a converted direction exists would overwrite its
+  // textures with an empty list, since the surfaces are consumed on
+  // conversion.
+  std::string direction_string = convertCompassDirectionToExistingAnimationString(direction, this->textures);
+  if (direction_string.empty() || this->textures[direction_string].empty()) {
+    direction_string = convertCompassDirectionToExistingAnimationString(direction, this->surfaces);
     if (direction_string.empty()) {
       SDL_Log("Cannot draw animation because the specified direction does not exist");
       return;

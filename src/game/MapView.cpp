@@ -1,5 +1,7 @@
 #include "MapView.hpp"
 
+#include <algorithm>
+
 #include "../engine/Utils.hpp"
 
 // Isometric tile size in pixels at zoom 1 and the pixel offset per height
@@ -42,8 +44,16 @@ bool MapView::loadMap(const std::string &zoo_file_name) {
     SDL_Log("Could not load map %s", zoo_file_name.c_str());
     return false;
   }
-  SDL_Log("Loaded map %s: %ux%u tiles", zoo_file_name.c_str(), this->zoo->getWidth(), this->zoo->getHeight());
+  SDL_Log("Loaded map %s: %ux%u tiles, %u objects", zoo_file_name.c_str(), this->zoo->getWidth(), this->zoo->getHeight(), (uint32_t) this->zoo->getObjects().size());
   this->buildCornerHeights();
+  // Paint order: back to front by tile diagonal
+  for (const ZooObject &object : this->zoo->getObjects()) {
+    this->sorted_objects.push_back(&object);
+  }
+  std::sort(this->sorted_objects.begin(), this->sorted_objects.end(),
+            [](const ZooObject * a, const ZooObject * b) {
+              return a->x + a->y < b->x + b->y;
+            });
   // Start looking at the middle of the map
   this->camera_x = 0.0f;
   this->camera_y = (float) (this->zoo->getWidth() + this->zoo->getHeight()) / 2.0f * TILE_HALF_HEIGHT;
@@ -227,5 +237,60 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     SDL_Texture * texture = this->terrain_textures.contains(batch.first) ? this->terrain_textures[batch.first] : nullptr;
     SDL_RenderGeometry(renderer, texture, batch.second.data(), (int) batch.second.size(),
                        batch_indices[batch.first].data(), (int) batch_indices[batch.first].size());
+  }
+
+  this->drawObjects(renderer, window_rect, center_x, center_y);
+}
+
+// The world animation of an object lives at objects/<code>/idle. Objects
+// without one, like paths and fences, have their own art layouts and are
+// not drawn yet.
+Animation * MapView::objectAnimation(const std::string &code) {
+  if (this->object_animations.contains(code)) {
+    return this->object_animations[code];
+  }
+  Animation * animation = this->resource_manager->getAnimation("objects/" + code + "/idle/idle");
+  this->object_animations[code] = animation;
+  if (animation == nullptr) {
+    this->missing_object_art++;
+  }
+  return animation;
+}
+
+void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y) {
+  for (const ZooObject * object : this->sorted_objects) {
+    // Positions are in 64ths of a tile
+    float tile_x = (float) object->x / 64.0f;
+    float tile_y = (float) object->y / 64.0f;
+    float world_x = (tile_x - tile_y) * TILE_HALF_WIDTH;
+    float world_y = (tile_x + tile_y) * TILE_HALF_HEIGHT;
+    // Anchor the sprite at the terrain height of its tile
+    uint32_t corner_x = (uint32_t) tile_x;
+    uint32_t corner_y = (uint32_t) tile_y;
+    if (corner_x <= this->zoo->getWidth() && corner_y <= this->zoo->getHeight()) {
+      world_y -= this->cornerHeight(corner_x, corner_y) * HEIGHT_STEP;
+    }
+    float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
+    float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
+    if (screen_x < -200.0f || screen_x > window_rect->w + 200.0f ||
+        screen_y < -200.0f || screen_y > window_rect->h + 200.0f) {
+      continue;
+    }
+    Animation * animation = this->objectAnimation(object->code);
+    if (animation == nullptr) {
+      continue;
+    }
+    float sprite_width = 0.0f;
+    float sprite_height = 0.0f;
+    if (!animation->getSize(&sprite_width, &sprite_height)) {
+      continue;
+    }
+    SDL_FRect destination = {
+      screen_x - sprite_width * this->zoom / 2.0f,
+      screen_y - sprite_height * this->zoom,
+      sprite_width * this->zoom,
+      sprite_height * this->zoom,
+    };
+    animation->draw(renderer, &destination);
   }
 }

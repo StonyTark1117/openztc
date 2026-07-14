@@ -121,7 +121,54 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
   size_t object_start = terrain_start + terrain_size;
   zoo->object_count = readUint32(data, object_start);
   zoo->object_section.assign(data + object_start, data + size);
+  zoo->parseObjects();
   return zoo;
+}
+
+// Object records are three length-prefixed strings, a length field for the
+// rest of the record and that many bytes of data. The tile position in
+// 64ths sits at a fixed place inside that data.
+void ZooFile::parseObjects() {
+  const uint8_t * data = this->object_section.data();
+  size_t size = this->object_section.size();
+  size_t position = 4;
+  for (uint32_t i = 0; i < this->object_count; i++) {
+    ZooObject object;
+    std::string * strings[3] = {&object.category, &object.subcategory, &object.code};
+    bool valid = true;
+    for (int s = 0; s < 3 && valid; s++) {
+      if (position + 4 > size) {
+        valid = false;
+        break;
+      }
+      uint32_t length = readUint32(data, position);
+      if (length > 64 || position + 4 + length > size) {
+        valid = false;
+        break;
+      }
+      strings[s]->assign((const char *) data + position + 4, length);
+      position += 4 + length;
+    }
+    if (!valid || position + 4 > size) {
+      SDL_Log("Stopped parsing objects at %u of %u", i, this->object_count);
+      break;
+    }
+    uint32_t remaining = readUint32(data, position);
+    position += 4;
+    if (position + remaining > size) {
+      SDL_Log("Object %u data does not fit, stopping", i);
+      break;
+    }
+    if (remaining >= 12) {
+      object.x = readUint32(data, position + 4);
+      object.y = readUint32(data, position + 8);
+    } else {
+      object.x = 0;
+      object.y = 0;
+    }
+    position += remaining;
+    this->objects.push_back(object);
+  }
 }
 
 ZooFile * ZooFile::loadFromFile(const std::string &path) {

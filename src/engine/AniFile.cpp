@@ -8,6 +8,9 @@
 
 Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::string &ztd_file, const std::string &file_name) {
   IniReader * ini_reader = ZtdFile::getIniReader(ztd_file, file_name);
+  if (ini_reader == nullptr) {
+    return nullptr;
+  }
 
   int width = ini_reader->getInt("animation", "x1") - ini_reader->getInt("animation", "x0");
   int height = ini_reader->getInt("animation", "y1") - ini_reader->getInt("animation", "y0");
