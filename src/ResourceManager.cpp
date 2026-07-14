@@ -243,6 +243,37 @@ std::string ResourceManager::getString(uint32_t string_id) {
   return this->string_map[string_id];
 }
 
+SDL_Texture * ResourceManager::getWrappedStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color, int wrap_width) {
+  return this->font_manager.getWrappedStringTexture(renderer, font, string, color, wrap_width);
+}
+
+int ResourceManager::getFontLineHeight(const int font) {
+  return this->font_manager.getFontLineHeight(font);
+}
+
+std::string ResourceManager::getTextFileContent(const std::string &file_name) {
+  std::string resource_location = this->getResourceLocation(file_name, false);
+  if (resource_location.empty()) {
+    return "";
+  }
+  int size = 0;
+  void * content = ZtdFile::getFileContent(resource_location, file_name, &size);
+  if (content == nullptr) {
+    return "";
+  }
+  std::string text = std::string((char *) content, (size_t) size);
+  free(content);
+  // The text files use Windows line endings
+  std::string result;
+  result.reserve(text.length());
+  for (char character : text) {
+    if (character != '\r') {
+      result += character;
+    }
+  }
+  return result;
+}
+
 std::vector<std::string> ResourceManager::getResourceNamesWithExtension(const std::string &extension) {
   std::vector<std::string> resource_names;
   for (auto resource_entry : this->resource_map) {

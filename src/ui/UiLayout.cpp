@@ -7,6 +7,7 @@
 #include "UiButton.hpp"
 #include "UiListBox.hpp"
 #include "UiScrollBar.hpp"
+#include "UiEditableText.hpp"
 
 UiLayout::UiLayout(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->ini_reader = ini_reader;
@@ -60,21 +61,34 @@ void UiLayout::process_sections() {
       this->children.push_back((UiElement *) new UiListBox(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UIScrollBar") {
       this->children.push_back((UiElement *) new UiScrollBar(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "UIEditableText") {
+      this->children.push_back((UiElement *) new UiEditableText(this->ini_reader, this->resource_manager, section));
     } else {
       SDL_Log("Support for element type %s is not yet implemented", element_type.c_str());
     }
   }
 
-  // Link list boxes to the scroll bar they reference by id
+  // Link list boxes and text boxes to the scroll bar they reference by id
   for (UiElement * element : this->children) {
     UiListBox * list_box = dynamic_cast<UiListBox*>(element);
-    if (list_box == nullptr || list_box->getScrollBarId() == 0) {
+    UiText * text = dynamic_cast<UiText*>(element);
+    int scroll_bar_id = 0;
+    if (list_box != nullptr) {
+      scroll_bar_id = list_box->getScrollBarId();
+    } else if (text != nullptr) {
+      scroll_bar_id = text->getScrollBarId();
+    }
+    if (scroll_bar_id == 0) {
       continue;
     }
     for (UiElement * other : this->children) {
       UiScrollBar * scroll_bar = dynamic_cast<UiScrollBar*>(other);
-      if (scroll_bar != nullptr && scroll_bar->getId() == list_box->getScrollBarId()) {
-        list_box->setScrollBar(scroll_bar);
+      if (scroll_bar != nullptr && scroll_bar->getId() == scroll_bar_id) {
+        if (list_box != nullptr) {
+          list_box->setScrollBar(scroll_bar);
+        } else {
+          text->setScrollBar(scroll_bar);
+        }
         break;
       }
     }

@@ -13,6 +13,8 @@ public:
   ~FontManager();
 
   SDL_Texture * getStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color);
+  SDL_Texture * getWrappedStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color, int wrap_width);
+  int getFontLineHeight(const int font);
 
 private:
   std::unordered_map<int, TTF_Font *> fonts;

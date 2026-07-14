@@ -40,7 +40,10 @@ public:
   Animation * getAnimation(const std::string &file_name);
   SDL_Texture * getLoadTexture(SDL_Renderer * renderer);
   SDL_Texture * getStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color);
+  SDL_Texture * getWrappedStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color, int wrap_width);
+  int getFontLineHeight(const int font);
   std::string getString(uint32_t string_id);
+  std::string getTextFileContent(const std::string &file_name);
   std::vector<std::string> getResourceNamesWithExtension(const std::string &extension);
 
   void PlayMenuMusic();

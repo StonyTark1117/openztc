@@ -23,6 +23,7 @@ public:
   void setScrollRect(SDL_FRect rect);
   void setRange(int range);
   int getValue();
+  void setValue(int value);
 
 private:
   Animation * background = nullptr;

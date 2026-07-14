@@ -68,6 +68,16 @@ int UiScrollBar::getValue() {
   return this->value;
 }
 
+void UiScrollBar::setValue(int value) {
+  if (value < 0) {
+    value = 0;
+  }
+  if (value > this->range) {
+    value = this->range;
+  }
+  this->value = value;
+}
+
 SDL_FRect UiScrollBar::getUpArrowRect() {
   return {this->draw_rect.x, this->draw_rect.y, this->draw_rect.w, this->arrow_height};
 }

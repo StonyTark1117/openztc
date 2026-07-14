@@ -32,6 +32,26 @@ SDL_Texture * FontManager::getStringTexture(SDL_Renderer * renderer, const int f
   return texture;
 }
 
+SDL_Texture * FontManager::getWrappedStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color, int wrap_width) {
+  this->loadFont(font);
+
+  SDL_Surface * surface = TTF_RenderText_Blended_Wrapped(this->fonts[font], string.c_str(), string.length(), color, wrap_width);
+  if (surface == NULL) {
+      SDL_Log("Couldn't create surface for wrapped text: %s", SDL_GetError());
+      return NULL;
+  }
+
+  SDL_Texture * texture = SDL_CreateTextureFromSurface(renderer, surface);
+  SDL_DestroySurface(surface);
+
+  return texture;
+}
+
+int FontManager::getFontLineHeight(const int font) {
+  this->loadFont(font);
+  return TTF_GetFontLineSkip(this->fonts[font]);
+}
+
 void FontManager::loadFont(const int font) {
   if (this->fonts.contains(font)) {
     return;

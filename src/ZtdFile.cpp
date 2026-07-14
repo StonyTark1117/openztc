@@ -47,7 +47,6 @@ void * ZtdFile::getFileContent(const std::string &ztd_file, const std::string &f
   }
   if (error != 0) {
     SDL_Log("Could not open file %s, got error %i", ztd_file.c_str(), error);
-    exit(1);
   }
   return content;
 }
