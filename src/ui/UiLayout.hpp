@@ -22,10 +22,9 @@ public:
   UiAction handleInputs(std::vector<Input> &inputs);
   void draw(SDL_Renderer * renderer, SDL_FRect * layout_rect);
 
+  std::vector<UiLayout*> getChildLayouts();
+
 protected:
-  std::string name = "";
-  std::vector<UiElement*> elements;
-  
   void process_sections();
   void process_layout(std::string layout);
 
