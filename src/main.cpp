@@ -30,7 +30,6 @@ int main(int argc, char **argv) {
   CursorManager cursor_manager(&resource_manager);
   cursor_manager.setCursor(CursorRole::DEFAULT);
   GameManager game_manager(&resource_manager, &cursor_manager, &mod_manager);
-  Simulation simulation;
 
   LoadScreen::run(&window, &config, &resource_manager, &game_manager);
 
@@ -60,7 +59,7 @@ int main(int argc, char **argv) {
         tick_accumulator = 1000;
       }
       while (tick_accumulator >= tick_duration_ms) {
-        simulation.tick();
+        game_manager.TickSimulation();
         tick_accumulator -= tick_duration_ms;
       }
 

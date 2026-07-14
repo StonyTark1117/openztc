@@ -21,6 +21,9 @@ GameManager::~GameManager() {
   if (this->map_view != nullptr) {
     delete this->map_view;
   }
+  if (this->simulation != nullptr) {
+    delete this->simulation;
+  }
   for(auto kv : layouts) {
     delete kv.second;
     layouts[kv.first] = nullptr;
@@ -29,10 +32,13 @@ GameManager::~GameManager() {
 
 bool GameManager::HandleInputs(std::vector<Input> &inputs) {
   if (this->map_view != nullptr) {
+    for (Input input : inputs) {
+      if (input.event == InputEvent::PAUSE_TOGGLE) {
+        this->simulation_paused = !this->simulation_paused;
+      }
+    }
     if (!this->map_view->handleInputs(inputs)) {
-      // Leaving the map returns to the menu
-      delete this->map_view;
-      this->map_view = nullptr;
+      this->leaveMap();
     }
     return true;
   }
@@ -102,6 +108,12 @@ bool GameManager::HandleInputs(std::vector<Input> &inputs) {
 void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   if (this->map_view != nullptr) {
     this->map_view->draw(renderer, window_rect);
+    // The in game toolbar draws over the map. Only its date and money
+    // displays are wired up so far.
+    this->updateGameHud();
+    if (this->layouts.contains("Main")) {
+      this->layouts["Main"]->draw(renderer, window_rect);
+    }
     return;
   }
   this->updateCreditsPages();
@@ -430,11 +442,7 @@ void GameManager::updateStartingCashText() {
   if (cash_text == nullptr) {
     return;
   }
-  std::string cash_string = std::to_string(this->starting_cash);
-  for (int position = (int) cash_string.length() - 3; position > 0; position -= 3) {
-    cash_string.insert(position, ",");
-  }
-  cash_text->setText("$" + cash_string);
+  cash_text->setText(this->formatMoney(this->starting_cash));
 
   // The difficulty follows from the chosen starting cash
   UiText * difficulty = dynamic_cast<UiText*>(this->layouts[FREEFORM_LAYOUT_NAME]->getChildWithId(DIFFICULTY_TEXT_ID));
@@ -506,6 +514,72 @@ void GameManager::startFreeformMap() {
     return;
   }
   this->map_view = view;
+  // A fresh game starts in January of year one with the chosen cash and,
+  // like the original, paused
+  this->simulation = new Simulation(1, this->starting_cash);
+  this->simulation_paused = true;
+  this->shown_month = -1;
+  this->shown_year = -1;
+  this->shown_cash = -1;
+}
+
+void GameManager::leaveMap() {
+  delete this->map_view;
+  this->map_view = nullptr;
+  if (this->simulation != nullptr) {
+    delete this->simulation;
+    this->simulation = nullptr;
+  }
+}
+
+void GameManager::TickSimulation() {
+  if (this->simulation != nullptr && this->map_view != nullptr && !this->simulation_paused) {
+    this->simulation->tick();
+  }
+}
+
+// The date and money displays in the in game toolbar, ui/main.lyt
+#define HUD_DATE_ID 1030
+#define HUD_MONEY_ID 1016
+// The month names in the lang dlls, 22101 is Jan
+#define MONTH_STRING_ID_BASE 22101
+
+std::string GameManager::formatMoney(int64_t amount) {
+  std::string cash_string = std::to_string(amount);
+  for (int position = (int) cash_string.length() - 3; position > 0; position -= 3) {
+    cash_string.insert(position, ",");
+  }
+  return "$" + cash_string;
+}
+
+void GameManager::updateGameHud() {
+  if (this->simulation == nullptr || !this->layouts.contains("Main")) {
+    return;
+  }
+  UiLayout * layout = this->layouts["Main"];
+  int month = this->simulation->getMonth();
+  int year = this->simulation->getYear();
+  if (month != this->shown_month || year != this->shown_year) {
+    UiText * date = dynamic_cast<UiText*>(layout->getChildWithId(HUD_DATE_ID));
+    if (date != nullptr) {
+      // The original formats the date as MMM, Year y
+      std::string year_string = std::to_string(year);
+      if (year_string.length() < 2) {
+        year_string = "0" + year_string;
+      }
+      date->setText(this->resource_manager->getString(MONTH_STRING_ID_BASE + month) + ", Year " + year_string);
+    }
+    this->shown_month = month;
+    this->shown_year = year;
+  }
+  int64_t cash = this->simulation->getCash();
+  if (cash != this->shown_cash) {
+    UiText * money = dynamic_cast<UiText*>(layout->getChildWithId(HUD_MONEY_ID));
+    if (money != nullptr) {
+      money->setText(this->formatMoney(cash));
+    }
+    this->shown_cash = cash;
+  }
 }
 
 // The dead "Get New Zoo Tycoon Items" screen (ui/update.lyt, the online

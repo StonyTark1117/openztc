@@ -39,6 +39,10 @@ std::vector<Input> InputManager::getInputs() {
           case SDLK_KP_MINUS:
             input.event = InputEvent::ZOOM_OUT;
             break;
+          case SDLK_SPACE:
+          case SDLK_P:
+            input.event = InputEvent::PAUSE_TOGGLE;
+            break;
           default:
             input.event = InputEvent::NONE;
             break;

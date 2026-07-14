@@ -58,3 +58,20 @@ TEST_CASE("truncated action data is rejected") {
   GameAction restored;
   CHECK(!deserializeGameAction(data, restored));
 }
+
+TEST_CASE("the date advances monthly from January of year one") {
+  Simulation simulation(7, 75000);
+  CHECK(simulation.getMonth() == 0);
+  CHECK(simulation.getYear() == 1);
+  CHECK(simulation.getCash() == 75000);
+  for (int i = 0; i < Simulation::TICKS_PER_MONTH; i++) {
+    simulation.tick();
+  }
+  CHECK(simulation.getMonth() == 1);
+  CHECK(simulation.getYear() == 1);
+  for (int i = 0; i < 11 * Simulation::TICKS_PER_MONTH; i++) {
+    simulation.tick();
+  }
+  CHECK(simulation.getMonth() == 0);
+  CHECK(simulation.getYear() == 2);
+}

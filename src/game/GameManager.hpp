@@ -11,6 +11,7 @@
 #include "../engine/CursorManager.hpp"
 #include "../ui/UiLayout.hpp"
 #include "MapView.hpp"
+#include "Simulation.hpp"
 #include "../ui/UiAction.hpp"
 
 class GameManager {
@@ -22,6 +23,10 @@ public:
   void Draw(SDL_Renderer * renderer, SDL_FRect * window_rect);
 
   void Load(std::atomic<float> * progress, std::atomic<bool> * is_done);
+
+  // Advances the active game by one fixed tick, a no-op outside a map or
+  // while the game is paused
+  void TickSimulation();
 
 private:
   std::unordered_map<std::string, UiLayout*> layouts;
@@ -52,6 +57,12 @@ private:
   int starting_cash = 0;
 
   MapView * map_view = nullptr;
+  Simulation * simulation = nullptr;
+  // Like the original, a loaded map starts paused
+  bool simulation_paused = true;
+  int shown_month = -1;
+  int shown_year = -1;
+  int64_t shown_cash = -1;
 
   bool handleTargetlessAction(UiAction);
   void startFreeformMap();
@@ -61,6 +72,9 @@ private:
   void setupModScreen();
   void refreshModList();
   void showSelectedMod();
+  void updateGameHud();
+  void leaveMap();
+  std::string formatMoney(int64_t amount);
   void showSelectedScenario();
   void showSelectedFreeformMap();
   void changeStartingCash(int amount);

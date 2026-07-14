@@ -19,13 +19,20 @@ public:
   // Fixed number of simulation ticks per second. The renderer runs
   // independently of this.
   static const int TICKS_PER_SECOND = 20;
+  // Game time: how many ticks make one game month.
+  // TODO: calibrate against the original's clock speed
+  static const int TICKS_PER_MONTH = 1200;
 
-  Simulation(uint32_t seed = 0);
+  Simulation(uint32_t seed = 0, int64_t starting_cash = 0);
 
   void queueAction(const GameAction &action);
   void tick();
 
   uint64_t getTickCount();
+  // Game date derived from the tick count, month 0-11 and year from 1
+  int getMonth();
+  int getYear();
+  int64_t getCash();
   // Cheap state fingerprint, used to detect desyncs when networking exists
   uint32_t getChecksum();
   // Deterministic pseudo random number in [0, bound)
@@ -34,6 +41,7 @@ public:
 private:
   uint64_t tick_count = 0;
   uint32_t rng_state = 1;
+  int64_t cash = 0;
   std::vector<GameAction> action_queue;
 
   void applyAction(const GameAction &action);

@@ -1,8 +1,9 @@
 #include "Simulation.hpp"
 
-Simulation::Simulation(uint32_t seed) {
+Simulation::Simulation(uint32_t seed, int64_t starting_cash) {
   // xorshift must not start at zero
   this->rng_state = seed == 0 ? 1 : seed;
+  this->cash = starting_cash;
 }
 
 void Simulation::queueAction(const GameAction &action) {
@@ -32,9 +33,20 @@ uint64_t Simulation::getTickCount() {
   return this->tick_count;
 }
 
+int Simulation::getMonth() {
+  return (int) ((this->tick_count / TICKS_PER_MONTH) % 12);
+}
+
+int Simulation::getYear() {
+  return (int) (this->tick_count / TICKS_PER_MONTH / 12) + 1;
+}
+
+int64_t Simulation::getCash() {
+  return this->cash;
+}
+
 uint32_t Simulation::getChecksum() {
-  // Will incorporate real game state once it exists
-  return (uint32_t) this->tick_count ^ this->rng_state;
+  return (uint32_t) this->tick_count ^ this->rng_state ^ (uint32_t) this->cash;
 }
 
 uint32_t Simulation::random(uint32_t bound) {

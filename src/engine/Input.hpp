@@ -18,6 +18,7 @@ enum class InputEvent {
   SCROLL,
   ZOOM_IN,
   ZOOM_OUT,
+  PAUSE_TOGGLE,
   BACK,
   QUIT
 };
