@@ -20,6 +20,8 @@ public:
   UiAction handleInputs(std::vector<Input> &inputs);
   void draw(SDL_Renderer * renderer, SDL_FRect * layout_rect);
 
+  void setRadioSelected(bool radio_selected);
+
 private:
   void setCursor(CursorRole role);
 
@@ -29,6 +31,7 @@ private:
   int font = 0;
   Animation * animation = nullptr;
   bool selected = false;
+  bool radio_selected = false;
   bool selected_updated = false;
   bool has_select_color = false;
   CompassDirection current_button_image = CompassDirection::N;

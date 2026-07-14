@@ -8,6 +8,9 @@
 #include "UiListBox.hpp"
 #include "UiScrollBar.hpp"
 #include "UiEditableText.hpp"
+#include "UiImageSet.hpp"
+#include "UiStatusImage.hpp"
+#include "UiRadioSet.hpp"
 
 UiLayout::UiLayout(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->ini_reader = ini_reader;
@@ -63,8 +66,29 @@ void UiLayout::process_sections() {
       this->children.push_back((UiElement *) new UiScrollBar(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UIEditableText") {
       this->children.push_back((UiElement *) new UiEditableText(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "UIImageSet") {
+      this->children.push_back((UiElement *) new UiImageSet(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "UIStatusImage") {
+      this->children.push_back((UiElement *) new UiStatusImage(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "UIRadioSet") {
+      UiRadioSet * radio_set = new UiRadioSet(this->ini_reader, this->resource_manager, section);
+      this->children.push_back((UiElement *) radio_set);
+      this->radio_sets.push_back(radio_set);
     } else {
       SDL_Log("Support for element type %s is not yet implemented", element_type.c_str());
+    }
+  }
+
+  // Link radio sets to the buttons they reference by id
+  for (UiRadioSet * radio_set : this->radio_sets) {
+    for (int button_id : radio_set->getButtonIds()) {
+      for (UiElement * element : this->children) {
+        UiButton * button = dynamic_cast<UiButton*>(element);
+        if (button != nullptr && button->getId() == button_id) {
+          radio_set->addButton(button);
+          break;
+        }
+      }
     }
   }
 
@@ -108,7 +132,18 @@ void UiLayout::process_layout(std::string layout) {
 }
 
 UiAction UiLayout::handleInputs(std::vector<Input> &inputs) {
-  return handleInputChildren(inputs);
+  UiAction result = handleInputChildren(inputs);
+  // When a clicked button is part of a radio set, it becomes the selected
+  // button of that set
+  if (result.source != 0) {
+    for (UiRadioSet * radio_set : this->radio_sets) {
+      if (radio_set->hasButton(result.source)) {
+        radio_set->select(result.source);
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 std::vector<UiLayout*> UiLayout::getChildLayouts() {

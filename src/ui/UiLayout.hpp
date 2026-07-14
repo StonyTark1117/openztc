@@ -25,6 +25,8 @@ public:
   std::vector<UiLayout*> getChildLayouts();
 
 protected:
+  std::vector<class UiRadioSet*> radio_sets;
+
   void process_sections();
   void process_layout(std::string layout);
 
