@@ -41,6 +41,10 @@ private:
   // Objects sorted in paint order and their animations by object code
   std::vector<const ZooObject *> sorted_objects;
   std::unordered_map<std::string, Animation *> object_animations;
+  // The cfg files form a registry mapping object records to their ai
+  // definition files, which name the art locations
+  std::vector<IniReader *> registry_configs;
+  bool registry_loaded = false;
   // Tiles carrying a path, for neighbor based path piece selection
   std::unordered_map<uint64_t, bool> path_tiles;
   int missing_object_art = 0;
@@ -65,6 +69,9 @@ private:
   void tileToWorld(float tile_x, float tile_y, float * world_x, float * world_y);
   std::string rotationDirection(uint32_t rotation);
   void sortObjects();
+  void loadObjectRegistry();
+  std::string registryLookup(const std::string &section, const std::string &key);
+  std::string objectArtPath(const ZooObject * object);
 };
 
 #endif // MAP_VIEW_HPP

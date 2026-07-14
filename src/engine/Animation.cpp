@@ -451,6 +451,10 @@ void Animation::loadSurfaces(std::string direction_string, AnimationData * data)
     SDL_Log("No frames in animation data");
     return;
   }
+  if (data->pallet == nullptr) {
+    SDL_Log("Animation %s has no pallet, skipping", direction_string.c_str());
+    return;
+  }
   this->frame_time_in_ms = data->frame_time_in_ms;
   this->has_background = data->has_background;
 
@@ -468,17 +472,18 @@ void Animation::loadSurfaces(std::string direction_string, AnimationData * data)
     this->surfaces[direction_string].push_back(SDL_CreateSurface(data->width, data->height, SDL_PIXELFORMAT_RGBA32));
     for(int y = 0; y < data->frames[i].height; y++) {
       int x = offset_x - data->frames[i].offset_x;
+      int row = y + offset_y - data->frames[i].offset_y;
       for(int instruction = 0; instruction < data->frames[i].lines[y].instruction_count; instruction++) {
         x += data->frames[i].lines[y].instructions[instruction].offset;
         for(int p = 0; p < data->frames[i].lines[y].instructions[instruction].color_count; p++, x++) {
-          if (x < 0 || x >= data->width || y < 0 || y >= data->height) {
-              SDL_Log("Failure to draw within the bounds. %i,%i does not fit in a %i,%i rectangle", x, y, data->width, data->height);
+          if (x < 0 || x >= data->width || row < 0 || row >= data->height) {
+              SDL_Log("Failure to draw within the bounds. %i,%i does not fit in a %i,%i rectangle", x, row, data->width, data->height);
               break;
             }
             if (data->frames[i].is_shadow) {
-              ((uint32_t *) this->surfaces[direction_string][i]->pixels)[data->width * (y + offset_y - data->frames[i].offset_y) + x] = 0xFF000000;
+              ((uint32_t *) this->surfaces[direction_string][i]->pixels)[data->width * row + x] = 0xFF000000;
             } else {
-              ((uint32_t *) this->surfaces[direction_string][i]->pixels)[data->width * (y + offset_y - data->frames[i].offset_y) + x] = data->pallet->colors[data->frames[i].lines[y].instructions[instruction].colors[p]];
+              ((uint32_t *) this->surfaces[direction_string][i]->pixels)[data->width * row + x] = data->pallet->colors[data->frames[i].lines[y].instructions[instruction].colors[p]];
             }
         }
       }

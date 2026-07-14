@@ -18,9 +18,13 @@ Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::str
   std::unordered_map<std::string, AnimationData *> * animations = new std::unordered_map<std::string, AnimationData *>;
   std::string directory = AniFile::getAnimationDirectory(ini_reader);
   for (std::string direction : ini_reader->getList("animation", "animation")) {
-    (*animations)[direction] = AniFile::loadAnimationData(pallet_manager, ztd_file, directory + "/" + direction);
-    (*animations)[direction]->width = width;
-    (*animations)[direction]->height = height;
+    AnimationData * data = AniFile::loadAnimationData(pallet_manager, ztd_file, directory + "/" + direction);
+    if (data == nullptr) {
+      continue;
+    }
+    data->width = width;
+    data->height = height;
+    (*animations)[direction] = data;
   }
 
   Animation * animation = new Animation(animations);
@@ -94,6 +98,14 @@ AnimationData * AniFile::loadAnimationData(PalletManager * pallet_manager, const
 
   // Continue reading animation data
   SDL_ReadU32LE(rw, &animation_data->frame_count);
+  if (animation_data->frame_count > (uint32_t) file_size) {
+    // Not animation data, the claimed frame count cannot fit in the file
+    SDL_Log("File %s in %s claims %u frames in %i bytes, not an animation", file_name.c_str(), ztd_file.c_str(), animation_data->frame_count, file_size);
+    SDL_CloseIO(rw);
+    free(file_content);
+    free(animation_data);
+    return nullptr;
+  }
 
   int frame_count = (int)animation_data->frame_count + (int) animation_data->has_background;
   animation_data->frames = (AnimationFrameData *) calloc(frame_count, sizeof(AnimationFrameData));

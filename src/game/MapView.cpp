@@ -25,6 +25,9 @@ MapView::~MapView() {
       SDL_DestroyTexture(texture_entry.second);
     }
   }
+  for (IniReader * reader : this->registry_configs) {
+    delete reader;
+  }
   if (this->zoo != nullptr) {
     delete this->zoo;
   }
@@ -308,6 +311,100 @@ std::string MapView::rotationDirection(uint32_t rotation) {
   return directions[((rotation / 2) + 4 - (uint32_t) this->orientation) % 4];
 }
 
+void MapView::loadObjectRegistry() {
+  this->registry_loaded = true;
+  std::vector<std::string> config_files = this->resource_manager->getResourceNamesWithExtension("CFG");
+  std::sort(config_files.begin(), config_files.end());
+  for (const std::string &config_file : config_files) {
+    IniReader * reader = this->resource_manager->getIniReader(config_file);
+    if (reader != nullptr) {
+      this->registry_configs.push_back(reader);
+    }
+  }
+}
+
+std::string MapView::registryLookup(const std::string &section, const std::string &key) {
+  for (IniReader * reader : this->registry_configs) {
+    std::string value = reader->get(section, key);
+    if (!value.empty()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+// Finds where an object's art lives through the cfg registry. Leaf entries
+// ([subcategory] code = leaf.ai) describe one object and group entries
+// ([category] subcategory = group.ai) bundle pieces like tank walls and
+// gates, keyed by the piece code. The ai file names its animations with
+// either a full path or a bare state name relative to the directory its
+// icon art lives in.
+std::string MapView::objectArtPath(const ZooObject * object) {
+  if (!this->registry_loaded) {
+    this->loadObjectRegistry();
+  }
+  std::string ai_path = this->registryLookup(object->subcategory, object->code);
+  bool group = false;
+  if (ai_path.empty()) {
+    ai_path = this->registryLookup(object->category, object->subcategory);
+    group = true;
+  }
+  if (ai_path.empty()) {
+    return "";
+  }
+  IniReader * ai_reader = this->resource_manager->getIniReader(ai_path);
+  if (ai_reader == nullptr) {
+    return "";
+  }
+  // Idle is the resting state, food pieces only have their fill states
+  std::string animation_section = group ? object->code + "/Animations" : "Animations";
+  std::string value;
+  for (const char * state : {"idle", "full", "mid", "small"}) {
+    value = ai_reader->get(animation_section, state);
+    if (value.empty() && group) {
+      value = ai_reader->get("Animations", state);
+    }
+    if (!value.empty()) {
+      break;
+    }
+  }
+  std::string result;
+  if (value.find('/') != std::string::npos) {
+    if (value.ends_with(".ani")) {
+      value = value.substr(0, value.length() - 4);
+    }
+    result = value;
+  } else if (!value.empty()) {
+    std::vector<std::string> icons = ai_reader->getList(group ? object->code + "/Icon" : "Icon", "Icon");
+    if (icons.empty()) {
+      icons = ai_reader->getList("Icon", "Icon");
+    }
+    if (!icons.empty()) {
+      // The icon path is <art directory>/<icon animation>/<icon name>
+      std::string base = icons.front();
+      for (int i = 0; i < 2; i++) {
+        size_t cut = base.rfind('/');
+        if (cut != std::string::npos) {
+          base = base.substr(0, cut);
+        }
+      }
+      if (group) {
+        base += "/" + object->code;
+      }
+      result = base + "/" + value + "/" + value;
+    }
+  }
+  delete ai_reader;
+  return result;
+}
+
+// Guests, animals and staff move around in the simulation, they are not
+// static scenery and get skipped until the simulation drives them
+static bool isEntityCategory(const std::string &category) {
+  return category == "animals" || category == "guests" || category == "keeper" ||
+         category == "maint" || category == "tour" || category == "helicopter";
+}
+
 // Art locations differ per category: plain objects have an idle animation
 // under objects/<code>, fences have one animation per direction and paths
 // have numbered shape pieces picked by which neighbors are also paths
@@ -348,10 +445,48 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   } else if (object->category == "ambient") {
     // Ambient markers are sound emitters without art
     return nullptr;
+  } else if (isEntityCategory(object->category)) {
+    return nullptr;
   } else {
-    draw_key = rotationDirection(object->rotation);
-    animation_path = "objects/" + object->code + "/idle/idle";
-    cache_key = animation_path;
+    // Tank walls carry a piece code like fences do, plain objects face
+    // where their rotation points
+    if (object->category == "tankwall") {
+      draw_key = rotationDirection(object->rotation + 6);
+    } else {
+      draw_key = rotationDirection(object->rotation);
+    }
+    // The usual layout is an idle animation under objects/<code>. The cfg
+    // registry locates the art that deviates from it, like tank pieces and
+    // effects with redirected animations, but its icon derived locations
+    // are not always right (fgate1's icon points at fgate's art), so the
+    // convention comes first. Food pieces only have their fill states and
+    // some art ships one animation file per direction.
+    std::vector<std::string> candidates;
+    candidates.push_back("objects/" + object->code + "/idle/idle");
+    std::string registry_path = this->objectArtPath(object);
+    if (!registry_path.empty()) {
+      candidates.push_back(registry_path);
+    }
+    candidates.push_back(object->category + "/" + object->code + "/full/full");
+    if (!draw_key.empty()) {
+      candidates.push_back("objects/" + object->code + "/" + draw_key + "/" + draw_key);
+    }
+    cache_key = object->category + "/" + object->subcategory + "/" + object->code + ":" + draw_key;
+    if (this->object_animations.contains(cache_key)) {
+      return this->object_animations[cache_key];
+    }
+    Animation * found = nullptr;
+    for (const std::string &candidate : candidates) {
+      found = this->resource_manager->getAnimation(candidate);
+      if (found != nullptr) {
+        break;
+      }
+    }
+    this->object_animations[cache_key] = found;
+    if (found == nullptr) {
+      this->missing_object_art++;
+    }
+    return found;
   }
   if (this->object_animations.contains(cache_key)) {
     return this->object_animations[cache_key];
@@ -388,6 +523,15 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     Animation * animation = this->objectAnimation(object, draw_key);
     if (animation == nullptr) {
       continue;
+    }
+    // Art without the wanted direction, like single state food pieces,
+    // draws its default animation instead
+    if (!draw_key.empty()) {
+      float key_width = 0.0f;
+      float key_height = 0.0f;
+      if (!animation->getSizeByKey(draw_key, &key_width, &key_height)) {
+        draw_key.clear();
+      }
     }
     // Anchor the sprite by the box its ani file declares around the world
     // anchor point, falling back to bottom center for art without one.

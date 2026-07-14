@@ -22,6 +22,10 @@ public:
 private:
   std::unordered_map<std::string, std::string> pallet_files_map;
   std::unordered_map<std::string, Pallet> pallet_map;
+  // Lowercase name to archive name, animations reference pallet files
+  // with inconsistent casing and the original runs on a case insensitive
+  // file system
+  std::unordered_map<std::string, std::string> pallet_name_map;
 
   void loadPallet(const std::string &file_name);
 

@@ -174,8 +174,9 @@ void IniReader::load(std::string file_content) {
     if (skip_to_end_of_line && character != '\n') {
       continue;
     }
-    // In between the key and the value we can ignore spaces and the equals
-    if (skip_to_value && (character == ' ' || character == '=')) {
+    // In between the key and the value we can ignore whitespace and the
+    // equals
+    if (skip_to_value && (character == ' ' || character == '\t' || character == '=')) {
       continue;
     }
     // We don't want windows newline characters in our map
@@ -239,7 +240,7 @@ void IniReader::load(std::string file_content) {
         current_section += std::tolower(character);
         break;
       case process_mode::KEY:
-        if (character == ' ' || character == '=') {
+        if (character == ' ' || character == '\t' || character == '=') {
           current_mode = process_mode::VALUE;
           skip_to_value = true;
           continue;

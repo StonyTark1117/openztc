@@ -1,5 +1,7 @@
 #include "PalletManager.hpp"
 
+#include <algorithm>
+
 #include "ZtdFile.hpp"
 
 PalletManager::PalletManager() {
@@ -24,12 +26,27 @@ Pallet * PalletManager::getPallet(std::string &file_name) {
     return &this->pallet_map[file_name];
   }
 
+  // Animations reference pallet files with inconsistent casing, fall back
+  // to a case insensitive match like the original's file system
+  std::string lower_name = file_name;
+  std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+  if (this->pallet_name_map.contains(lower_name)) {
+    std::string archive_name = this->pallet_name_map[lower_name];
+    if (!this->pallet_map.contains(archive_name)) {
+      this->loadPallet(archive_name);
+    }
+    return &this->pallet_map[archive_name];
+  }
+
   SDL_Log("Could not find pallet file %s, returning nullptr", file_name.c_str());
   return nullptr;
 }
 
 void PalletManager::addPalletFileToMap(const std::string &pallet_file, std::string ztd_file) {
   this->pallet_files_map[pallet_file] = ztd_file;
+  std::string lower_name = pallet_file;
+  std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+  this->pallet_name_map[lower_name] = pallet_file;
 }
 
 void PalletManager::loadPalletMap(std::atomic<float> * progress, std::atomic<bool> * is_done) {
