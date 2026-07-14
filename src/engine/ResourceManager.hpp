@@ -29,6 +29,10 @@ public:
 
   Config * getConfig() { return this->config; }
 
+  // Mod archives load before the game archives, so their resources win.
+  // Must be set before load_resource_map runs.
+  void setModArchives(const std::vector<std::string> &archives) { this->mod_archives = archives; }
+
   void load_resource_map(std::atomic<float> * progress, std::atomic<bool> * is_done);
   void load_string_map(std::atomic<float> * progress, std::atomic<bool> * is_done);
   void load_animation_map(std::atomic<float> * progress, std::atomic<bool> * is_done);
@@ -65,6 +69,7 @@ private:
 
 
   Config * config;
+  std::vector<std::string> mod_archives;
   FontManager font_manager;
   PalletManager pallet_manager;
 };

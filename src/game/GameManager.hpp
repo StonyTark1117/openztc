@@ -6,6 +6,7 @@
 #include <atomic>
 
 #include "../engine/IniReader.hpp"
+#include "../engine/ModManager.hpp"
 #include "../engine/ResourceManager.hpp"
 #include "../engine/CursorManager.hpp"
 #include "../ui/UiLayout.hpp"
@@ -14,7 +15,7 @@
 
 class GameManager {
 public:
-  GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager);
+  GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager, ModManager * mod_manager = nullptr);
   ~GameManager();
 
   bool HandleInputs(std::vector<Input> &inputs);
@@ -28,6 +29,7 @@ private:
   bool loaded = false;
   ResourceManager * resource_manager = nullptr;
   CursorManager * cursor_manager = nullptr;
+  ModManager * mod_manager = nullptr;
 
   size_t credits_page = 0;
   uint64_t credits_page_start = 0;
@@ -56,6 +58,9 @@ private:
   void updateCreditsPages();
   void loadScenarioList();
   void loadFreeformMapList();
+  void setupModScreen();
+  void refreshModList();
+  void showSelectedMod();
   void showSelectedScenario();
   void showSelectedFreeformMap();
   void changeStartingCash(int amount);

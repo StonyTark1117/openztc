@@ -66,6 +66,20 @@ void ResourceManager::load_resource_map(std::atomic<float> * progress, std::atom
 
   SDL_Log("Loading resource map...");
 
+  // Mods load first, so their resources shadow the game archives. Their
+  // order is the load order from the mod manager.
+  for (std::string archive : this->mod_archives) {
+    SDL_Log("Loading mod archive %s", archive.c_str());
+    for (std::string file : ZtdFile::getFileList(archive)) {
+      if (resource_map.count(file) == 0) {
+        resource_map[file] = archive;
+        if (Utils::getFileExtension(file) == "PAL") {
+          this->pallet_manager.addPalletFileToMap(file, archive);
+        }
+      }
+    }
+  }
+
   std::vector<std::string> resource_paths = config->getResourcePaths();
   float progress_per_resource_path_load = (100.0f - *progress) / (float) resource_paths.size();
   for (std::string path : resource_paths) {

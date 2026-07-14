@@ -60,6 +60,13 @@ int UiListBox::getSelectedIndex() {
   return this->selected_index;
 }
 
+void UiListBox::setSelectedIndex(int index) {
+  if (index < -1 || index >= (int) this->items.size()) {
+    index = -1;
+  }
+  this->selected_index = index;
+}
+
 int UiListBox::getScrollBarId() {
   return this->scroll_bar_id;
 }

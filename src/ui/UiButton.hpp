@@ -21,6 +21,9 @@ public:
   void draw(SDL_Renderer * renderer, SDL_FRect * layout_rect);
 
   void setRadioSelected(bool radio_selected);
+  // Replaces the label from the layout's textid, the texture regenerates
+  // on the next draw
+  void setText(const std::string &text);
 
 private:
   void setCursor(CursorRole role);

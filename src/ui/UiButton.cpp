@@ -101,6 +101,14 @@ void UiButton::setRadioSelected(bool radio_selected) {
   }
 }
 
+void UiButton::setText(const std::string &text) {
+  this->text_string = text;
+  // The textures are cached by the resource manager, dropping the
+  // references is enough
+  this->text = nullptr;
+  this->shadow = nullptr;
+}
+
 void UiButton::draw(SDL_Renderer * renderer, SDL_FRect * layout_rect) {
   if (!this->text_string.empty() && (this->text == nullptr || (this->selected_updated && this->has_select_color))) {
     std::vector<std::string> color_values;

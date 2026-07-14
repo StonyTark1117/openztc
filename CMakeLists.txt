@@ -160,9 +160,11 @@ if (BUILD_TESTS)
     enable_testing()
     add_executable(${PROJECT_NAME}-tests
         tests/test_inireader.cpp
+        tests/test_modmanager.cpp
         tests/test_simulation.cpp
         tests/test_zoofile.cpp
         src/engine/IniReader.cpp
+        src/engine/ModManager.cpp
         src/engine/ZooFile.cpp
         src/game/Simulation.cpp
         src/game/GameAction.cpp)

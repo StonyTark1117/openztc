@@ -8,10 +8,12 @@
 #include "../ui/UiImage.hpp"
 #include "../ui/UiText.hpp"
 #include "../ui/UiEditableText.hpp"
+#include "../ui/UiButton.hpp"
 
-GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager) {
+GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager, ModManager * mod_manager) {
   this->resource_manager = resource_manager;
   this->cursor_manager = cursor_manager;
+  this->mod_manager = mod_manager;
   this->starting_cash = resource_manager->getConfig()->getFreeformStartingCash();
 }
 
@@ -157,6 +159,7 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
   this->loadScenarioList();
   this->loadFreeformMapList();
   this->updateStartingCashText();
+  this->setupModScreen();
   *is_done = true;
 }
 
@@ -505,6 +508,107 @@ void GameManager::startFreeformMap() {
   this->map_view = view;
 }
 
+// The dead "Get New Zoo Tycoon Items" screen (ui/update.lyt, the online
+// item service shut down long ago) hosts the mod manager. Its widgets are
+// repurposed: the file list shows the mods with their enabled state and
+// the buttons toggle and reorder them. Changes save immediately and apply
+// on the next launch.
+#define MOD_LAYOUT_NAME "Update"
+#define MOD_TITLE_ID 2101
+#define MOD_INFO_LIST_ID 2103
+#define MOD_LIST_LABEL_ID 2105
+#define MOD_LIST_ID 2106
+#define MOD_DONE_BUTTON_ID 2110
+#define MOD_STOP_BUTTON_ID 2111
+#define MOD_TOGGLE_BUTTON_ID 2112
+#define MOD_HIDDEN_BUTTON_ID 2115
+#define MOD_MOVE_UP_BUTTON_ID 2114
+
+void GameManager::setupModScreen() {
+  if (!this->layouts.contains(MOD_LAYOUT_NAME)) {
+    return;
+  }
+  UiLayout * layout = this->layouts[MOD_LAYOUT_NAME];
+  UiText * title = dynamic_cast<UiText*>(layout->getChildWithId(MOD_TITLE_ID));
+  if (title != nullptr) {
+    title->setText("Zoo Tycoon Mods");
+  }
+  UiText * list_label = dynamic_cast<UiText*>(layout->getChildWithId(MOD_LIST_LABEL_ID));
+  if (list_label != nullptr) {
+    list_label->setText("Installed Mods");
+  }
+  UiButton * done_button = dynamic_cast<UiButton*>(layout->getChildWithId(MOD_DONE_BUTTON_ID));
+  if (done_button != nullptr) {
+    done_button->setText("Done");
+  }
+  UiButton * toggle_button = dynamic_cast<UiButton*>(layout->getChildWithId(MOD_TOGGLE_BUTTON_ID));
+  if (toggle_button != nullptr) {
+    toggle_button->setText("Enable / Disable");
+  }
+  UiButton * move_button = dynamic_cast<UiButton*>(layout->getChildWithId(MOD_MOVE_UP_BUTTON_ID));
+  if (move_button != nullptr) {
+    move_button->setText("Move Up");
+  }
+  // The stop button overlaps the done button and the check items button
+  // overlaps the toggle button, the original showed them one at a time
+  UiElement * stop_button = layout->getChildWithId(MOD_STOP_BUTTON_ID);
+  if (stop_button != nullptr) {
+    stop_button->setActive(false);
+  }
+  UiElement * hidden_button = layout->getChildWithId(MOD_HIDDEN_BUTTON_ID);
+  if (hidden_button != nullptr) {
+    hidden_button->setActive(false);
+  }
+  this->refreshModList();
+  this->showSelectedMod();
+}
+
+void GameManager::refreshModList() {
+  if (!this->layouts.contains(MOD_LAYOUT_NAME)) {
+    return;
+  }
+  UiListBox * list_box = dynamic_cast<UiListBox*>(this->layouts[MOD_LAYOUT_NAME]->getChildWithId(MOD_LIST_ID));
+  if (list_box == nullptr) {
+    return;
+  }
+  std::vector<std::string> items;
+  if (this->mod_manager != nullptr) {
+    for (const ModInfo &mod : this->mod_manager->getMods()) {
+      items.push_back((mod.enabled ? "+ " : "-  ") + mod.file_name);
+    }
+  }
+  if (items.empty()) {
+    items.push_back("No mods found");
+  }
+  list_box->setItems(items);
+}
+
+void GameManager::showSelectedMod() {
+  if (!this->layouts.contains(MOD_LAYOUT_NAME)) {
+    return;
+  }
+  UiLayout * layout = this->layouts[MOD_LAYOUT_NAME];
+  UiListBox * info = dynamic_cast<UiListBox*>(layout->getChildWithId(MOD_INFO_LIST_ID));
+  UiListBox * list_box = dynamic_cast<UiListBox*>(layout->getChildWithId(MOD_LIST_ID));
+  if (info == nullptr || list_box == nullptr) {
+    return;
+  }
+  std::vector<std::string> lines;
+  int selected_index = list_box->getSelectedIndex();
+  if (this->mod_manager == nullptr || this->mod_manager->getMods().empty()) {
+    lines.push_back("Put mod ztd files in the mods");
+    lines.push_back("directory next to the game data");
+  } else if (selected_index < 0 || selected_index >= (int) this->mod_manager->getMods().size()) {
+    lines.push_back("Select a mod to manage it");
+    lines.push_back("Earlier mods win conflicts");
+  } else {
+    const ModInfo &mod = this->mod_manager->getMods()[selected_index];
+    lines.push_back(mod.file_name + (mod.enabled ? " is enabled" : " is disabled"));
+    lines.push_back("Changes apply on the next launch");
+  }
+  info->setItems(lines);
+}
+
 bool GameManager::handleTargetlessAction(UiAction action) {
   switch (action.source) {
     case (int) ActionSource::MAIN_MENU_EXIT:
@@ -524,6 +628,37 @@ bool GameManager::handleTargetlessAction(UiAction action) {
       break;
     case CASH_DOWN_SPINNER_ID:
       this->changeStartingCash(-this->resource_manager->getConfig()->getFreeformCashIncrement());
+      break;
+    case MOD_LIST_ID:
+      this->showSelectedMod();
+      break;
+    case MOD_TOGGLE_BUTTON_ID:
+    case MOD_MOVE_UP_BUTTON_ID: {
+      if (this->mod_manager == nullptr || !this->layouts.contains(MOD_LAYOUT_NAME)) {
+        break;
+      }
+      UiListBox * list_box = dynamic_cast<UiListBox*>(this->layouts[MOD_LAYOUT_NAME]->getChildWithId(MOD_LIST_ID));
+      if (list_box == nullptr) {
+        break;
+      }
+      int selected_index = list_box->getSelectedIndex();
+      if (selected_index < 0 || selected_index >= (int) this->mod_manager->getMods().size()) {
+        break;
+      }
+      if (action.source == MOD_TOGGLE_BUTTON_ID) {
+        this->mod_manager->toggle(selected_index);
+      } else if (this->mod_manager->move(selected_index, -1)) {
+        selected_index--;
+      }
+      this->refreshModList();
+      list_box->setSelectedIndex(selected_index);
+      this->showSelectedMod();
+      break;
+    }
+    case MOD_DONE_BUTTON_ID:
+      if (this->layouts.contains(MOD_LAYOUT_NAME)) {
+        this->layouts[MOD_LAYOUT_NAME]->setActive(false);
+      }
       break;
     default:
       break;

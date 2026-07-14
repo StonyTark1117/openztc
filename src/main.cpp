@@ -2,8 +2,10 @@
 #include <SDL3/SDL_main.h>
 
 #include "engine/Config.hpp"
+#include "engine/ModManager.hpp"
 #include "engine/Window.hpp"
 #include "engine/ResourceManager.hpp"
+#include "engine/Utils.hpp"
 #include "engine/CursorManager.hpp"
 #include "game/LoadScreen.hpp"
 #include "engine/InputManager.hpp"
@@ -17,14 +19,17 @@ int main(int argc, char **argv) {
   (void) argv;
 
   Config config;
+  ModManager mod_manager(Utils::getZooTycoonPath() + "/mods");
+  mod_manager.load();
   ResourceManager resource_manager(&config);
+  resource_manager.setModArchives(mod_manager.getEnabledArchives());
   InputManager input_manager;
   std::vector<Input> inputs;
 
   Window window("OpenZTC", config.getScreenWidth(), config.getScreenHeight(), 60.0f);
   CursorManager cursor_manager(&resource_manager);
   cursor_manager.setCursor(CursorRole::DEFAULT);
-  GameManager game_manager(&resource_manager, &cursor_manager);
+  GameManager game_manager(&resource_manager, &cursor_manager, &mod_manager);
   Simulation simulation;
 
   LoadScreen::run(&window, &config, &resource_manager, &game_manager);

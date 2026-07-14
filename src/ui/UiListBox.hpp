@@ -23,6 +23,7 @@ public:
 
   void setItems(std::vector<std::string> items);
   int getSelectedIndex();
+  void setSelectedIndex(int index);
   int getScrollBarId();
   void setScrollBar(UiScrollBar * scroll_bar);
 
