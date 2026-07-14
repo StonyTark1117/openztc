@@ -131,13 +131,22 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_CURRENT_SOURCE_DIR}/font ${CMAKE_CURRENT_BINARY_DIR}/font)
 
+option(BUILD_TOOLS_ZOO "Build the developer tools" OFF)
+if (BUILD_TOOLS_ZOO)
+    add_executable(dumpzoo tools/dumpzoo.cpp src/engine/ZooFile.cpp)
+    target_include_directories(dumpzoo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
+    target_link_libraries(dumpzoo PRIVATE SDL3::SDL3-static)
+endif()
+
 option(BUILD_TESTS "Build the unit tests" OFF)
 if (BUILD_TESTS)
     enable_testing()
     add_executable(${PROJECT_NAME}-tests
         tests/test_inireader.cpp
         tests/test_simulation.cpp
+        tests/test_zoofile.cpp
         src/engine/IniReader.cpp
+        src/engine/ZooFile.cpp
         src/game/Simulation.cpp
         src/game/GameAction.cpp)
     target_include_directories(${PROJECT_NAME}-tests PRIVATE

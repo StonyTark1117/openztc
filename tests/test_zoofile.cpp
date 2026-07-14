@@ -1,0 +1,85 @@
+#include <doctest.h>
+
+#include <cstring>
+#include <vector>
+
+#include "../src/engine/ZooFile.hpp"
+
+// Builds a minimal synthetic zoo file: F-variant header, a WxW terrain
+// stream and an object section with one record
+static std::vector<uint8_t> syntheticZoo(uint32_t size, size_t header_padding) {
+  std::vector<uint8_t> data;
+  auto push32 = [&data](uint32_t value) {
+    data.push_back(value & 0xFF);
+    data.push_back((value >> 8) & 0xFF);
+    data.push_back((value >> 16) & 0xFF);
+    data.push_back((value >> 24) & 0xFF);
+  };
+  const char * magic = "TZFBF";
+  data.insert(data.end(), magic, magic + 5);
+  data.push_back(0);
+  data.push_back(0);
+  data.push_back(0);
+  push32(1033);       // language
+  push32(size);       // width
+  push32(size);       // height
+  // variable header remainder, like the real variants have
+  for (size_t i = 0; i < header_padding; i++) {
+    data.push_back(0);
+  }
+  // terrain stream
+  for (uint32_t i = 0; i < size * size; i++) {
+    push32(i % 5);          // height
+    data.push_back(0x0F);   // shape
+    data.push_back(0x03);   // type
+    push32(0);              // unknown
+  }
+  // object section: one record starting with category and subcategory
+  push32(1);
+  push32(5);
+  const char * category = "paths";
+  data.insert(data.end(), category, category + 5);
+  push32(5);
+  data.insert(data.end(), category, category + 5);
+  return data;
+}
+
+TEST_CASE("synthetic zoo file parses") {
+  std::vector<uint8_t> file = syntheticZoo(20, 12);
+  ZooFile * zoo = ZooFile::loadFromMemory(file.data(), file.size());
+  REQUIRE(zoo != nullptr);
+  CHECK(zoo->getWidth() == 20);
+  CHECK(zoo->getHeight() == 20);
+  CHECK(zoo->getVariant() == 'F');
+  CHECK(zoo->getLanguage() == 1033);
+  CHECK(zoo->getObjectCount() == 1);
+  CHECK(zoo->getTile(0, 0).height == 0);
+  CHECK(zoo->getTile(1, 0).height == 1);
+  CHECK(zoo->getTile(0, 0).type == 0x03);
+  CHECK(zoo->getTile(0, 0).shape == 0x0F);
+  delete zoo;
+}
+
+TEST_CASE("header size differences are absorbed by the anchor search") {
+  for (size_t padding : {0, 2, 12, 40, 300}) {
+    std::vector<uint8_t> file = syntheticZoo(15, padding);
+    ZooFile * zoo = ZooFile::loadFromMemory(file.data(), file.size());
+    REQUIRE(zoo != nullptr);
+    CHECK(zoo->getWidth() == 15);
+    CHECK(zoo->getTile(14, 14).type == 0x03);
+    delete zoo;
+  }
+}
+
+TEST_CASE("garbage is rejected") {
+  std::vector<uint8_t> garbage(1000, 0xAB);
+  CHECK(ZooFile::loadFromMemory(garbage.data(), garbage.size()) == nullptr);
+  std::vector<uint8_t> tiny = {'T', 'Z', 'F', 'B'};
+  CHECK(ZooFile::loadFromMemory(tiny.data(), tiny.size()) == nullptr);
+}
+
+TEST_CASE("truncated terrain is rejected") {
+  std::vector<uint8_t> file = syntheticZoo(20, 12);
+  file.resize(file.size() / 2);
+  CHECK(ZooFile::loadFromMemory(file.data(), file.size()) == nullptr);
+}
