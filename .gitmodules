@@ -1,6 +1,6 @@
 [submodule "vendor/pe-resource-loader"]
 	path = vendor/pe-resource-loader
-	url = https://github.com/sharkwouter/pe-resource-loader.git
+	url = https://github.com/StonyTark1117/pe-resource-loader.git
 [submodule "vendor/SDL_ttf"]
 	path = vendor/SDL_ttf
 	url = https://github.com/libsdl-org/SDL_ttf.git
