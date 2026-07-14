@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include "ui/UiListBox.hpp"
+#include "ui/UiImage.hpp"
 
 GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->resource_manager = resource_manager;
@@ -135,6 +136,7 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
   this->loaded = true;
   delete ini_reader;
   this->loadScenarioList();
+  this->loadFreeformMapList();
   *is_done = true;
 }
 
@@ -177,6 +179,68 @@ void GameManager::loadScenarioList() {
   list_box->setItems(scenario_names);
 }
 
+// The name of the freeform map selection layout in ui/gamescrn.lyt and the
+// ids of its map list and map picture elements in ui/mapselec.lyt
+#define FREEFORM_LAYOUT_NAME "load_maps_for_freeform"
+#define MAP_LIST_ID 11504
+#define MAP_PICTURE_ID 11501
+
+void GameManager::loadFreeformMapList() {
+  if (!this->layouts.contains(FREEFORM_LAYOUT_NAME)) {
+    return;
+  }
+  UiListBox * list_box = dynamic_cast<UiListBox*>(this->layouts[FREEFORM_LAYOUT_NAME]->getChildWithId(MAP_LIST_ID));
+  if (list_box == nullptr) {
+    SDL_Log("Could not find the freeform map list box");
+    return;
+  }
+
+  std::vector<std::string> scenario_files = this->resource_manager->getResourceNamesWithExtension("SCN");
+  std::sort(scenario_files.begin(), scenario_files.end());
+
+  std::vector<std::string> map_names;
+  this->freeform_map_icons.clear();
+  for (std::string scenario_file : scenario_files) {
+    IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
+    if (scenario_reader == nullptr) {
+      continue;
+    }
+    uint32_t name_id = scenario_reader->getUnsignedInt("freeform", "name", 0);
+    std::string icon = scenario_reader->get("freeform", "icon");
+    delete scenario_reader;
+    if (name_id == 0) {
+      // Only scenarios with a freeform section are maps
+      continue;
+    }
+    std::string map_name = this->resource_manager->getString(name_id);
+    if (map_name.empty()) {
+      continue;
+    }
+    map_names.push_back(map_name);
+    this->freeform_map_icons.push_back(icon);
+  }
+
+  SDL_Log("Found %i freeform maps", (int) map_names.size());
+  list_box->setItems(map_names);
+}
+
+void GameManager::showSelectedFreeformMap() {
+  if (!this->layouts.contains(FREEFORM_LAYOUT_NAME)) {
+    return;
+  }
+  UiLayout * layout = this->layouts[FREEFORM_LAYOUT_NAME];
+  UiListBox * list_box = dynamic_cast<UiListBox*>(layout->getChildWithId(MAP_LIST_ID));
+  UiImage * picture = dynamic_cast<UiImage*>(layout->getChildWithId(MAP_PICTURE_ID));
+  if (list_box == nullptr || picture == nullptr) {
+    return;
+  }
+  int selected_index = list_box->getSelectedIndex();
+  if (selected_index < 0 || selected_index >= (int) this->freeform_map_icons.size()) {
+    return;
+  }
+  picture->setImagePath(this->freeform_map_icons[selected_index]);
+}
+
 // The credits screen consists of multiple page layouts which the original
 // game cycles through automatically. The page duration is not part of the
 // layout data, so it is defined here.
@@ -216,6 +280,9 @@ bool GameManager::handleTargetlessAction(UiAction action) {
   switch (action.source) {
     case (int) ActionSource::MAIN_MENU_EXIT:
       return false;
+      break;
+    case MAP_LIST_ID:
+      this->showSelectedFreeformMap();
       break;
     default:
       break;

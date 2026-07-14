@@ -32,9 +32,13 @@ private:
   uint64_t credits_page_start = 0;
   bool credits_active = false;
 
+  std::vector<std::string> freeform_map_icons;
+
   bool handleTargetlessAction(UiAction);
   void updateCreditsPages();
   void loadScenarioList();
+  void loadFreeformMapList();
+  void showSelectedFreeformMap();
 };
 
 #endif // GAME_MANAGER_HPP

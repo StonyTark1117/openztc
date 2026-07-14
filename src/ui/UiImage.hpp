@@ -17,6 +17,8 @@ public:
 
   void draw(SDL_Renderer *renderer, SDL_FRect * layout_rect);
 
+  void setImagePath(const std::string &image_path);
+
 private:
   std::string image_path = "";
   SDL_Texture * image = nullptr;

@@ -34,6 +34,21 @@ UiImage::UiImage(IniReader * ini_reader, ResourceManager * resource_manager, std
   }
 }
 
+void UiImage::setImagePath(const std::string &image_path) {
+  if (image_path == this->image_path) {
+    return;
+  }
+  this->image_path = image_path;
+  if (this->image) {
+    SDL_DestroyTexture(this->image);
+    this->image = nullptr;
+  }
+  if (this->animation) {
+    delete this->animation;
+    this->animation = nullptr;
+  }
+}
+
 UiImage::~UiImage() {
   if (this->image) {
     SDL_DestroyTexture(this->image);
