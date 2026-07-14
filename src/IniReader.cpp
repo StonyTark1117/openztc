@@ -23,21 +23,26 @@ IniReader::IniReader(const std::string &filename) {
   FILE * fd = fopen(filename.c_str(), "r");
   if (fd == NULL) {
     SDL_Log("Could not open ini file %s", filename.c_str());
+    return;
   }
   fseek(fd, 0L, SEEK_END);
   size_t size = ftell(fd) + 1;
   fseek(fd, 0, SEEK_SET);
   void * buffer = malloc(size);
   if (buffer == nullptr) {
-    SDL_Log("Could not load content of ini file %s", filename.c_str());  
+    SDL_Log("Could not load content of ini file %s", filename.c_str());
+    fclose(fd);
     return;
   }
   size_t read_count = fread(buffer, sizeof(char), size, fd);
+  fclose(fd);
   if (read_count == 0) {
-    SDL_Log("Could not load content of ini file %s", filename.c_str());  
+    SDL_Log("Could not load content of ini file %s", filename.c_str());
+    free(buffer);
     return;
   }
-  load(std::string((char *) buffer, size));
+  load(std::string((char *) buffer, read_count));
+  free(buffer);
 
   #ifdef DEBUG
     // this->printContent();
