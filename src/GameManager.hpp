@@ -32,6 +32,7 @@ private:
 
   bool handleTargetlessAction(UiAction);
   void updateCreditsPages();
+  void loadScenarioList();
 };
 
 #endif // GAME_MANAGER_HPP

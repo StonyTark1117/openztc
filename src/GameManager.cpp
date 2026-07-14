@@ -3,6 +3,8 @@
 #include <string>
 #include <algorithm>
 
+#include "ui/UiListBox.hpp"
+
 GameManager::GameManager(ResourceManager * resource_manager) {
   this->resource_manager = resource_manager;
 }
@@ -131,7 +133,47 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
   }
   this->loaded = true;
   delete ini_reader;
+  this->loadScenarioList();
   *is_done = true;
+}
+
+// The id of the scenario list box in ui/scenario.lyt
+#define SCENARIO_LIST_ID 50002
+
+void GameManager::loadScenarioList() {
+  if (!this->layouts.contains("scenario")) {
+    return;
+  }
+  UiListBox * list_box = dynamic_cast<UiListBox*>(this->layouts["scenario"]->getChildWithId(SCENARIO_LIST_ID));
+  if (list_box == nullptr) {
+    SDL_Log("Could not find the scenario list box");
+    return;
+  }
+
+  std::vector<std::string> scenario_files = this->resource_manager->getResourceNamesWithExtension("SCN");
+  std::sort(scenario_files.begin(), scenario_files.end());
+
+  std::vector<std::string> scenario_names;
+  for (std::string scenario_file : scenario_files) {
+    IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
+    if (scenario_reader == nullptr) {
+      continue;
+    }
+    uint32_t name_id = scenario_reader->getUnsignedInt("desc", "name", 0);
+    delete scenario_reader;
+    if (name_id == 0) {
+      // Scenarios without a name, like freeform.scn, are not shown in the list
+      continue;
+    }
+    std::string scenario_name = this->resource_manager->getString(name_id);
+    if (scenario_name.empty()) {
+      continue;
+    }
+    scenario_names.push_back(scenario_name);
+  }
+
+  SDL_Log("Found %i scenarios", (int) scenario_names.size());
+  list_box->setItems(scenario_names);
 }
 
 // The credits screen consists of multiple page layouts which the original
