@@ -73,6 +73,10 @@ void PalletManager::loadPallet(const std::string &file_name) {
     SDL_IOStream * pallet_rw = SDL_IOFromMem(pallet_file_content, pallet_file_size);
 
     SDL_ReadU32LE(pallet_rw, &pallet.color_count);
+    if (pallet.color_count > 256) {
+      SDL_Log("Pallet %s claims %u colors, limiting to 256", file_name.c_str(), pallet.color_count);
+      pallet.color_count = 256;
+    }
     SDL_ReadIO(pallet_rw, pallet.colors, (size_t) pallet.color_count * sizeof(uint32_t));
     SDL_CloseIO(pallet_rw);
 
