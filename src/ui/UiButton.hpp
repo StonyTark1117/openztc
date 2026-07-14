@@ -6,11 +6,11 @@
 #include <SDL3/SDL.h>
 
 #include "UiElement.hpp"
-#include "../IniReader.hpp"
-#include "../Animation.hpp"
-#include "../ResourceManager.hpp"
-#include "../CursorManager.hpp"
-#include "../CompassDirection.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/Animation.hpp"
+#include "../engine/ResourceManager.hpp"
+#include "../engine/CursorManager.hpp"
+#include "../engine/CompassDirection.hpp"
 
 class UiButton : public UiElement {
 public:

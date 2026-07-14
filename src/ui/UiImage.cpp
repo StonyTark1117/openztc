@@ -1,7 +1,7 @@
 #include "UiImage.hpp"
 
-#include "../Utils.hpp"
-#include "../CompassDirection.hpp"
+#include "../engine/Utils.hpp"
+#include "../engine/CompassDirection.hpp"
 
 UiImage::UiImage(IniReader * ini_reader, ResourceManager * resource_manager, std::string name) {
   this->ini_reader = ini_reader;

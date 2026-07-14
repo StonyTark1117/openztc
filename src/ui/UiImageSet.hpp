@@ -7,8 +7,8 @@
 #include <SDL3/SDL.h>
 
 #include "UiElement.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
 
 // A set of images of which one is shown at a time, like the male/female icon
 // on the animal panel. Which one is picked with setIndex at runtime.

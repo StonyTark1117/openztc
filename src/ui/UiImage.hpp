@@ -6,9 +6,9 @@
 #include <SDL3/SDL.h>
 
 #include "UiElement.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
-#include "../Animation.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
+#include "../engine/Animation.hpp"
 
 class UiImage : public UiElement {
 public:

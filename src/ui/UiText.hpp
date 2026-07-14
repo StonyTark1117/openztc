@@ -7,8 +7,8 @@
 
 #include "UiElement.hpp"
 #include "UiScrollBar.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
 
 class UiText : public UiElement {
 public:

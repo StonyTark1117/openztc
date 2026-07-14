@@ -7,8 +7,8 @@
 #include <SDL3/SDL.h>
 
 #include "UiImageSet.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
 
 // An image set which picks its image by comparing a value against the
 // transition thresholds from the layout data, like the red/yellow/green

@@ -9,9 +9,9 @@
 
 #include "UiAction.hpp"
 
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
-#include "../Input.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
+#include "../engine/Input.hpp"
 
 #define FONT_SIZE 24
 

@@ -5,10 +5,10 @@
 
 #include "UiElement.hpp"
 
-#include "../Animation.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
-#include "../Input.hpp"
+#include "../engine/Animation.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
+#include "../engine/Input.hpp"
 
 class UiScrollBar : public UiElement {
 public:

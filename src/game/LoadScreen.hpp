@@ -1,10 +1,10 @@
 #ifndef LOAD_SCREEN_HPP
 #define LOAD_SCREEN_HPP
 
-#include "ResourceManager.hpp"
+#include "../engine/ResourceManager.hpp"
 #include "GameManager.hpp"
-#include "Config.hpp"
-#include "Window.hpp"
+#include "../engine/Config.hpp"
+#include "../engine/Window.hpp"
 
 class LoadScreen {
 public:

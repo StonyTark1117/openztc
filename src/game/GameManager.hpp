@@ -5,11 +5,11 @@
 #include <vector>
 #include <atomic>
 
-#include "IniReader.hpp"
-#include "ResourceManager.hpp"
-#include "CursorManager.hpp"
-#include "ui/UiLayout.hpp"
-#include "ui/UiAction.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
+#include "../engine/CursorManager.hpp"
+#include "../ui/UiLayout.hpp"
+#include "../ui/UiAction.hpp"
 
 class GameManager {
 public:

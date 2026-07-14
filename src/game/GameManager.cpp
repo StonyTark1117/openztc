@@ -3,10 +3,10 @@
 #include <string>
 #include <algorithm>
 
-#include "ui/UiListBox.hpp"
-#include "ui/UiImage.hpp"
-#include "ui/UiText.hpp"
-#include "ui/UiEditableText.hpp"
+#include "../ui/UiListBox.hpp"
+#include "../ui/UiImage.hpp"
+#include "../ui/UiText.hpp"
+#include "../ui/UiEditableText.hpp"
 
 GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->resource_manager = resource_manager;

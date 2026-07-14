@@ -8,8 +8,8 @@
 
 #include "UiElement.hpp"
 #include "UiButton.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
 
 // A group of buttons of which one is selected at a time, like the tab rows
 // on the in-game panels. The layout links the member buttons by id after all

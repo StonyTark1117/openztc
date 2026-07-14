@@ -1,6 +1,6 @@
 #include "UiButton.hpp"
 
-#include "../CompassDirection.hpp"
+#include "../engine/CompassDirection.hpp"
 
 UiButton::UiButton(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager, std::string name) {
   this->ini_reader = ini_reader;

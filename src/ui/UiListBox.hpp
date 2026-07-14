@@ -9,9 +9,9 @@
 #include "UiElement.hpp"
 #include "UiScrollBar.hpp"
 
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
-#include "../Input.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
+#include "../engine/Input.hpp"
 
 class UiListBox : public UiElement {
 public:

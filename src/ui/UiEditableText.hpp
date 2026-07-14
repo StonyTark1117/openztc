@@ -6,8 +6,8 @@
 #include <SDL3/SDL.h>
 
 #include "UiElement.hpp"
-#include "../IniReader.hpp"
-#include "../ResourceManager.hpp"
+#include "../engine/IniReader.hpp"
+#include "../engine/ResourceManager.hpp"
 
 // A text field the application can change at runtime. Editing with the
 // keyboard is not supported yet, since key events are not handled anywhere.
