@@ -176,16 +176,23 @@ mod manager, keeping the vanilla look of the screen. The engine's resource
 path system already loads loose archives, so managing mods is managing
 `.ztd` files and directories plus a load order.
 
-Planned features, taking inspiration from
+Implemented: mods are `.ztd` archives in a `mods` directory next to the
+game data. They load before the game archives so they win conflicts, and
+earlier mods win over later ones. The screen lists them with their enabled
+state; Enable / Disable, Move Up and Done drive it, state persists in
+`mods/openztc-mods.txt` (plain text, one `+name`/`-name` line per mod in
+load order) and changes apply on the next launch. Mods the manager has not
+seen before come up enabled, like dropping a `.ztd` into the game
+directory of the original. The manager never touches or distributes game
+data.
+
+Still planned, taking inspiration from
 [ModZT](https://github.com/songstormstudios/modzt) (MIT):
 
-- List installed mods with enable/disable without deleting files.
-- Load order control (the resource path override chain already defines
-  precedence; the manager makes it visible and editable).
 - File conflict detection: two mods providing the same resource name is
   already deterministic in the engine, the manager should show who wins.
 - Named loadouts/bundles that can be exported and imported.
-- Install by dropping a `.ztd`/zip into a mods folder the engine watches.
+- Apply changes without restarting (resource map reload).
 
 ### 7. Later
 
