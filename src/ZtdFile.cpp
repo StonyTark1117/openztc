@@ -60,6 +60,9 @@ SDL_Surface * ZtdFile::getImageSurfaceBmp(const std::string &ztd_file, const std
   if (file_content) {
     SDL_IOStream * rw = SDL_IOFromMem(file_content, file_size);
     surface = IMG_LoadTyped_IO(rw, 1, "BMP");
+    if (surface == NULL) {
+      SDL_Log("Could not decode %s in %s: %s", file_name.c_str(), ztd_file.c_str(), SDL_GetError());
+    }
     free(file_content);
   } else {
     SDL_Log("Could not load content of file %s in %s", file_name.c_str(), ztd_file.c_str());
@@ -76,6 +79,14 @@ SDL_Surface * ZtdFile::getImageSurfaceTga(const std::string &ztd_file, const std
   if (file_content) {
     SDL_IOStream * rw = SDL_IOFromMem(file_content, file_size);
     surface = IMG_LoadTyped_IO(rw, 1, "TGA");
+    if (surface == NULL) {
+      SDL_Log("Could not decode %s in %s: %s", file_name.c_str(), ztd_file.c_str(), SDL_GetError());
+    } else {
+      // The original game ignores the alpha channel of tga files. Some of
+      // them, like the Marine Mania scenario background, have an alpha
+      // channel which is zero everywhere and would be invisible if blended.
+      SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
+    }
     free(file_content);
   } else {
     SDL_Log("Could not load content of file %s in %s", file_name.c_str(), ztd_file.c_str());
