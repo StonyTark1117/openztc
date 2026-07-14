@@ -168,7 +168,26 @@ passes, not before.
 - Build tools (paths, fences, terrain painting) emitting GameActions;
   placement rules and costs.
 
+### Built-in mod manager (independent of the gameplay milestones)
+
+The main menu's "Get New Zoo Tycoon Items" button pointed at official
+download servers that no longer exist. OpenZTC repurposes it as a built-in
+mod manager, keeping the vanilla look of the screen. The engine's resource
+path system already loads loose archives, so managing mods is managing
+`.ztd` files and directories plus a load order.
+
+Planned features, taking inspiration from
+[ModZT](https://github.com/songstormstudios/modzt) (MIT):
+
+- List installed mods with enable/disable without deleting files.
+- Load order control (the resource path override chain already defines
+  precedence; the manager makes it visible and editable).
+- File conflict detection: two mods providing the same resource name is
+  already deterministic in the engine, the manager should show who wins.
+- Named loadouts/bundles that can be exported and imported.
+- Install by dropping a `.ztd`/zip into a mods folder the engine watches.
+
 ### 7. Later
 
 - Save writing (round-trip a vanilla save), oversized custom maps,
-  multiplayer transport on the GameAction bus, mod loading conveniences.
+  multiplayer transport on the GameAction bus.
