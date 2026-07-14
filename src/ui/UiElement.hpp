@@ -123,7 +123,7 @@ protected:
   void drawChildren(SDL_Renderer * renderer, SDL_FRect * parent_rect) {
     for (int l=0; l < (8 + 1); l++) {
       for (UiElement * child : this->children) {
-        if (child->layer == l) {
+        if (child->layer == l && child->getActive()) {
           if (!child->getAnchors().empty()) {
             UiElement * parent = nullptr;
             for (int anchor : child->getAnchors()) {
