@@ -185,6 +185,11 @@ void IniReader::load(std::string file_content) {
     // On newline save the data if we're in value mode, otherwise just reset the character number
     if (character == '\n') {
       if (current_mode == process_mode::VALUE && skip_to_end_of_line == false) {
+        // Trim trailing whitespace, some layout files have values like
+        // "UILayout " with a trailing space
+        while (!current_value.empty() && (current_value.back() == ' ' || current_value.back() == '\t')) {
+          current_value.pop_back();
+        }
         if (!current_section.empty() && !current_key.empty() && !current_value.empty()) {
           if (!content[current_section].contains(current_key)) {
           content[current_section][current_key] = current_value;
