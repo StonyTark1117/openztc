@@ -79,6 +79,7 @@ bool GameManager::HandleInputs(std::vector<Input> &inputs) {
 }
 
 void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
+  this->updateCreditsPages();
   for (int layer=0; layer < (8 + 1); layer++) {
     for(auto kv : layouts) {
       UiLayout * layout = layouts[kv.first];
@@ -131,6 +132,41 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
   this->loaded = true;
   delete ini_reader;
   *is_done = true;
+}
+
+// The credits screen consists of multiple page layouts which the original
+// game cycles through automatically. The page duration is not part of the
+// layout data, so it is defined here.
+#define CREDITS_PAGE_DURATION_MS 8000
+
+void GameManager::updateCreditsPages() {
+  if (!this->layouts.contains("credits")) {
+    return;
+  }
+  UiLayout * credits = this->layouts["credits"];
+  if (!credits->getActive()) {
+    this->credits_active = false;
+    return;
+  }
+  std::vector<UiLayout*> pages = credits->getChildLayouts();
+  if (pages.empty()) {
+    return;
+  }
+
+  uint64_t now = SDL_GetTicks();
+  if (!this->credits_active) {
+    // The credits screen was just opened, start at the first page
+    this->credits_active = true;
+    this->credits_page = 0;
+    this->credits_page_start = now;
+  } else if (now - this->credits_page_start >= CREDITS_PAGE_DURATION_MS) {
+    this->credits_page = (this->credits_page + 1) % pages.size();
+    this->credits_page_start = now;
+  }
+
+  for (size_t i = 0; i < pages.size(); i++) {
+    pages[i]->setActive(i == this->credits_page);
+  }
 }
 
 bool GameManager::handleTargetlessAction(UiAction action) {

@@ -73,3 +73,14 @@ void UiLayout::process_layout(std::string layout) {
 UiAction UiLayout::handleInputs(std::vector<Input> &inputs) {
   return handleInputChildren(inputs);
 }
+
+std::vector<UiLayout*> UiLayout::getChildLayouts() {
+  std::vector<UiLayout*> child_layouts;
+  for (UiElement * child : this->children) {
+    UiLayout * child_layout = dynamic_cast<UiLayout*>(child);
+    if (child_layout != nullptr) {
+      child_layouts.push_back(child_layout);
+    }
+  }
+  return child_layouts;
+}

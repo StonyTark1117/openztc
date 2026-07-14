@@ -26,7 +26,12 @@ private:
   bool loaded = false;
   ResourceManager * resource_manager = nullptr;
 
+  size_t credits_page = 0;
+  uint64_t credits_page_start = 0;
+  bool credits_active = false;
+
   bool handleTargetlessAction(UiAction);
+  void updateCreditsPages();
 };
 
 #endif // GAME_MANAGER_HPP

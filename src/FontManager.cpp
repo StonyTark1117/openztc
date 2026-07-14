@@ -65,6 +65,10 @@ void FontManager::loadFont(const int font) {
       font_file = "Aileron-Black.otf";
       font_size = 12;
       break;
+    case 3270:  // Exit button in the credits screen
+      font_file = "Aileron-Black.otf";
+      font_size = 12;
+      break;
     default:
       SDL_Log("Could not load unknown font %i, using default", font);
       font_file = "Aileron-Regular.otf";
