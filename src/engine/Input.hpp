@@ -16,6 +16,8 @@ enum class InputEvent {
   RIGHT_CLICK,
   CURSOR_MOVE,
   SCROLL,
+  ZOOM_IN,
+  ZOOM_OUT,
   BACK,
   QUIT
 };

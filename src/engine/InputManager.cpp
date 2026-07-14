@@ -26,7 +26,23 @@ std::vector<Input> InputManager::getInputs() {
         break;
       case SDL_EVENT_KEY_DOWN:
         input.type = InputType::BUTTON;
-        input.event = event.key.key == SDLK_ESCAPE ? InputEvent::BACK : InputEvent::NONE;
+        switch (event.key.key) {
+          case SDLK_ESCAPE:
+            input.event = InputEvent::BACK;
+            break;
+          case SDLK_PLUS:
+          case SDLK_EQUALS:
+          case SDLK_KP_PLUS:
+            input.event = InputEvent::ZOOM_IN;
+            break;
+          case SDLK_MINUS:
+          case SDLK_KP_MINUS:
+            input.event = InputEvent::ZOOM_OUT;
+            break;
+          default:
+            input.event = InputEvent::NONE;
+            break;
+        }
         break;
       case SDL_EVENT_MOUSE_BUTTON_DOWN:
         input.type = InputType::POSITIONED;

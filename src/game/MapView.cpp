@@ -100,8 +100,11 @@ bool MapView::handleInputs(std::vector<Input> &inputs) {
           this->last_cursor = input.position;
         }
         break;
-      case InputEvent::SCROLL:
-        this->zoom *= input.scroll > 0.0f ? 1.15f : 1.0f / 1.15f;
+      case InputEvent::ZOOM_IN:
+      case InputEvent::ZOOM_OUT:
+      case InputEvent::SCROLL: {
+        bool in = input.event == InputEvent::ZOOM_IN || (input.event == InputEvent::SCROLL && input.scroll > 0.0f);
+        this->zoom *= in ? 1.15f : 1.0f / 1.15f;
         if (this->zoom < ZOOM_MIN) {
           this->zoom = ZOOM_MIN;
         }
@@ -109,6 +112,7 @@ bool MapView::handleInputs(std::vector<Input> &inputs) {
           this->zoom = ZOOM_MAX;
         }
         break;
+      }
       default:
         break;
     }
