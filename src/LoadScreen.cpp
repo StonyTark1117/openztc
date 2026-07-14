@@ -52,8 +52,9 @@ void LoadScreen::run(Window * window, Config * config, ResourceManager * resourc
     if (loading_strings_thread == nullptr) {
       loading_strings_thread = new std::thread(&ResourceManager::load_string_map, resource_manager, &strings_progress, &strings_done);
     }
-    // Only start loading layouts after the resources have been loaded
-    if (resources_done.load() && loading_layouts_thread == nullptr) {
+    // Only start loading layouts after the resources and strings have been
+    // loaded, since layouts use both
+    if (resources_done.load() && strings_done.load() && loading_layouts_thread == nullptr) {
       resource_manager->PlayMenuMusic();
       loading_layouts_thread = new std::thread(&GameManager::Load, game_manager, &layouts_progress, &layouts_done);
     }
