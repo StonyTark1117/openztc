@@ -42,7 +42,6 @@ private:
   typedef struct {
     std::string icon;
     std::string description_file;
-    int starting_cash;
     std::string savegame;
   } FreeformMapInfo;
 

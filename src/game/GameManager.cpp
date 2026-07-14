@@ -11,6 +11,7 @@
 GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->resource_manager = resource_manager;
   this->cursor_manager = cursor_manager;
+  this->starting_cash = resource_manager->getConfig()->getFreeformStartingCash();
 }
 
 GameManager::~GameManager() {
@@ -154,6 +155,7 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
   delete ini_reader;
   this->loadScenarioList();
   this->loadFreeformMapList();
+  this->updateStartingCashText();
   *is_done = true;
 }
 
@@ -300,20 +302,18 @@ void GameManager::fillObjectivePlaceholder(std::string &text, int value) {
 #define DIFFICULTY_TEXT_ID 11531
 
 // The difficulty strings in the lang dlls. Which starting cash amounts they
-// correspond to is not in the game data, so the thresholds are defined here.
+// correspond to is not in the game data. These thresholds were measured by
+// stepping the original game's spinner through its whole range: hard up to
+// $20,000, intermediate from $25,000, easy from $105,000.
 #define DIFFICULTY_EASY_STRING_ID 11536
 #define DIFFICULTY_INTERMEDIATE_STRING_ID 11537
 #define DIFFICULTY_HARD_STRING_ID 11538
-#define DIFFICULTY_EASY_MINIMUM_CASH 45000
-#define DIFFICULTY_INTERMEDIATE_MINIMUM_CASH 20000
+#define DIFFICULTY_EASY_MINIMUM_CASH 105000
+#define DIFFICULTY_INTERMEDIATE_MINIMUM_CASH 25000
 
-// The starting cash of scenario/freeform.scn, used when a map does not set
-// its own. The step and limits used by the spinners are not in the game
-// data, so they are defined here.
-#define DEFAULT_STARTING_CASH 50000
-#define STARTING_CASH_STEP 5000
-#define STARTING_CASH_MIN 5000
-#define STARTING_CASH_MAX 500000
+// The spinner default, step and limits come from the MS* keys in the UI
+// section of zoo.ini. Like the original, the chosen amount persists while
+// switching maps and screens.
 
 void GameManager::loadFreeformMapList() {
   if (!this->layouts.contains(FREEFORM_LAYOUT_NAME)) {
@@ -337,7 +337,6 @@ void GameManager::loadFreeformMapList() {
     }
     uint32_t name_id = scenario_reader->getUnsignedInt("freeform", "name", 0);
     std::string icon = scenario_reader->get("freeform", "icon");
-    int starting_cash = scenario_reader->getInt("start", "setcash", DEFAULT_STARTING_CASH);
     std::string savegame = scenario_reader->get("start", "savegame");
     delete scenario_reader;
     if (name_id == 0) {
@@ -352,7 +351,7 @@ void GameManager::loadFreeformMapList() {
     // The description shown on the selection screen is the txt file next to
     // the scenario file
     std::string description_file = scenario_file.substr(0, scenario_file.length() - 4) + ".txt";
-    this->freeform_maps.push_back({icon, description_file, starting_cash, savegame});
+    this->freeform_maps.push_back({icon, description_file, savegame});
   }
 
   SDL_Log("Found %i freeform maps", (int) map_names.size());
@@ -382,17 +381,17 @@ void GameManager::showSelectedFreeformMap() {
   if (description != nullptr && !map.description_file.empty()) {
     description->setText(this->resource_manager->getTextFileContent(map.description_file));
   }
-  this->starting_cash = map.starting_cash;
   this->updateStartingCashText();
 }
 
 void GameManager::changeStartingCash(int amount) {
+  Config * config = this->resource_manager->getConfig();
   this->starting_cash += amount;
-  if (this->starting_cash < STARTING_CASH_MIN) {
-    this->starting_cash = STARTING_CASH_MIN;
+  if (this->starting_cash < config->getFreeformCashMin()) {
+    this->starting_cash = config->getFreeformCashMin();
   }
-  if (this->starting_cash > STARTING_CASH_MAX) {
-    this->starting_cash = STARTING_CASH_MAX;
+  if (this->starting_cash > config->getFreeformCashMax()) {
+    this->starting_cash = config->getFreeformCashMax();
   }
   this->updateStartingCashText();
 }
@@ -498,10 +497,10 @@ bool GameManager::handleTargetlessAction(UiAction action) {
       this->startFreeformMap();
       break;
     case CASH_UP_SPINNER_ID:
-      this->changeStartingCash(STARTING_CASH_STEP);
+      this->changeStartingCash(this->resource_manager->getConfig()->getFreeformCashIncrement());
       break;
     case CASH_DOWN_SPINNER_ID:
-      this->changeStartingCash(-STARTING_CASH_STEP);
+      this->changeStartingCash(-this->resource_manager->getConfig()->getFreeformCashIncrement());
       break;
     default:
       break;

@@ -22,6 +22,11 @@ public:
   std::string getResDllName();
   SDL_Color getProgressColor();
   SDL_FRect getProgressPosition();
+  // The freeform starting cash spinner settings from the UI section
+  int getFreeformStartingCash();
+  int getFreeformCashIncrement();
+  int getFreeformCashMin();
+  int getFreeformCashMax();
 private:
   IniReader * reader = NULL;
 };

@@ -86,3 +86,20 @@ SDL_FRect Config::getProgressPosition() {
 
   return rect;
 }
+// The freeform cash spinner settings. The fallbacks are the values the
+// original game ships with in zoo.ini.
+int Config::getFreeformStartingCash() {
+  return reader->getInt("UI", "MSStartingCash", 75000);
+}
+
+int Config::getFreeformCashIncrement() {
+  return reader->getInt("UI", "MSCashIncrement", 5000);
+}
+
+int Config::getFreeformCashMin() {
+  return reader->getInt("UI", "MSMinCash", 10000);
+}
+
+int Config::getFreeformCashMax() {
+  return reader->getInt("UI", "MSMaxCash", 500000);
+}

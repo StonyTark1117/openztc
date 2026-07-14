@@ -27,6 +27,8 @@ public:
   ResourceManager(Config * config);
   ~ResourceManager();
 
+  Config * getConfig() { return this->config; }
+
   void load_resource_map(std::atomic<float> * progress, std::atomic<bool> * is_done);
   void load_string_map(std::atomic<float> * progress, std::atomic<bool> * is_done);
   void load_animation_map(std::atomic<float> * progress, std::atomic<bool> * is_done);
