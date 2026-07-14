@@ -21,6 +21,11 @@ ResourceManager::~ResourceManager() {
   if (this->menu_music != nullptr){
     MIX_DestroyAudio(this->menu_music);
   }
+  for (auto animation_entry : this->animation_map) {
+    if (animation_entry.second != nullptr) {
+      delete animation_entry.second;
+    }
+  }
 }
 
 std::string ResourceManager::getResourceLocation(const std::string &resource_name, bool failure_is_critical) {
@@ -199,9 +204,16 @@ IniReader * ResourceManager::getIniReader(const std::string &file_name) {
 }
 
 Animation *ResourceManager::getAnimation(const std::string &file_name) {
+  // Animations are cached and owned by the resource manager, so elements
+  // using the same animation share one instance
+  if (this->animation_map.contains(file_name)) {
+    return this->animation_map[file_name];
+  }
+
+  Animation * animation = nullptr;
   std::string resource_location = getResourceLocation(file_name, false);
   if (!resource_location.empty()) {
-    return AniFile::getAnimation(&this->pallet_manager, resource_location, file_name);
+    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, file_name);
   } else if (file_name.find(";") != std::string::npos) {
     int semicolon_position = file_name.find(";");
     std::string full_file_name = file_name.substr(0, semicolon_position);
@@ -209,12 +221,16 @@ Animation *ResourceManager::getAnimation(const std::string &file_name) {
       full_file_name += ".ani";
     }
     resource_location = getResourceLocation(full_file_name, false);
-    return AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name);
+    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name);
   } else {
     std::string full_file_name = file_name + ".ani";
     resource_location = getResourceLocation(full_file_name);
-    return AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name);
+    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name);
   }
+  if (animation != nullptr) {
+    this->animation_map[file_name] = animation;
+  }
+  return animation;
 }
 
 SDL_Texture * ResourceManager::getLoadTexture(SDL_Renderer *renderer) {

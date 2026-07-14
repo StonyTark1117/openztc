@@ -37,9 +37,6 @@ UiButton::UiButton(IniReader * ini_reader, ResourceManager * resource_manager, C
 
 UiButton::~UiButton() {
   SDL_DestroyTexture(text);
-  if (this->animation) {
-    delete animation;
-  }
   for (UiElement * child : this->children) {
     delete child;
   }
@@ -97,10 +94,17 @@ void UiButton::setCursor(CursorRole role) {
   }
 }
 
+void UiButton::setRadioSelected(bool radio_selected) {
+  if (radio_selected != this->radio_selected) {
+    this->radio_selected = radio_selected;
+    this->selected_updated = true;
+  }
+}
+
 void UiButton::draw(SDL_Renderer * renderer, SDL_FRect * layout_rect) {
   if (!this->text_string.empty() && (this->text == nullptr || (this->selected_updated && this->has_select_color))) {
     std::vector<std::string> color_values;
-    if (this->selected && this->has_select_color && !this->ini_reader->getList(name, "selectcolor").empty()) {
+    if ((this->selected || this->radio_selected) && this->has_select_color && !this->ini_reader->getList(name, "selectcolor").empty()) {
       color_values = this->ini_reader->getList(name, "selectcolor");
       this->current_button_image = CompassDirection::S;
     } else {

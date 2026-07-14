@@ -32,6 +32,14 @@ UiImage::UiImage(IniReader * ini_reader, ResourceManager * resource_manager, std
       this->image_path = ini_reader->get(name, "animation");
     }
   }
+
+  // Load animations now, so it happens during the load screen instead of
+  // the first time the image is drawn. Textures still need the renderer, so
+  // other image types keep loading on the first draw.
+  std::string extension = Utils::getFileExtension(this->image_path);
+  if (!this->image_path.empty() && (extension.empty() || extension == "ANI")) {
+    this->animation = this->resource_manager->getAnimation(this->image_path);
+  }
 }
 
 void UiImage::setImagePath(const std::string &image_path) {
@@ -43,18 +51,13 @@ void UiImage::setImagePath(const std::string &image_path) {
     SDL_DestroyTexture(this->image);
     this->image = nullptr;
   }
-  if (this->animation) {
-    delete this->animation;
-    this->animation = nullptr;
-  }
+  // Animations are owned by the resource manager
+  this->animation = nullptr;
 }
 
 UiImage::~UiImage() {
   if (this->image) {
     SDL_DestroyTexture(this->image);
-  }
-  if (this->animation) {
-    delete animation;
   }
   for (UiElement * child : this->children) {
     delete child;

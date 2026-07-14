@@ -32,18 +32,7 @@ UiScrollBar::UiScrollBar(IniReader * ini_reader, ResourceManager * resource_mana
 }
 
 UiScrollBar::~UiScrollBar() {
-  if (this->background != nullptr) {
-    delete this->background;
-  }
-  if (this->up_arrow != nullptr) {
-    delete this->up_arrow;
-  }
-  if (this->down_arrow != nullptr) {
-    delete this->down_arrow;
-  }
-  if (this->thumb != nullptr) {
-    delete this->thumb;
-  }
+  // The animations are owned by the resource manager
   for (UiElement * child : this->children) {
     delete child;
   }
