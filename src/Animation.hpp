@@ -20,6 +20,7 @@ public:
 
     void draw(SDL_Renderer * renderer, float x, float y, CompassDirection direction=CompassDirection::N);
     void draw(SDL_Renderer * renderer, SDL_FRect * draw_rect, CompassDirection direction=CompassDirection::N);
+    bool getSize(float * w, float * h, CompassDirection direction=CompassDirection::N);
 
     void queryTexture(CompassDirection direction, float * w, float * h);
 private:

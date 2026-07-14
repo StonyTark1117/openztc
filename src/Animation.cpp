@@ -38,6 +38,20 @@ void Animation::draw(SDL_Renderer *renderer,  float x, float y, CompassDirection
   this->draw(renderer, &rect, direction);
 }
 
+bool Animation::getSize(float * w, float * h, CompassDirection direction) {
+  std::string direction_string = convertCompassDirectionToExistingAnimationString(direction, this->textures);
+  if (!direction_string.empty() && !this->textures[direction_string].empty()) {
+    return SDL_GetTextureSize(this->textures[direction_string][0], w, h);
+  }
+  direction_string = convertCompassDirectionToExistingAnimationString(direction, this->surfaces);
+  if (!direction_string.empty() && !this->surfaces[direction_string].empty()) {
+    *w = (float) this->surfaces[direction_string][0]->w;
+    *h = (float) this->surfaces[direction_string][0]->h;
+    return true;
+  }
+  return false;
+}
+
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {
   std::string direction_string = convertCompassDirectionToString(direction);
   if (!this->textures.contains(direction_string)) {

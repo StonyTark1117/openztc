@@ -5,6 +5,8 @@
 #include "UiImage.hpp"
 #include "UiText.hpp"
 #include "UiButton.hpp"
+#include "UiListBox.hpp"
+#include "UiScrollBar.hpp"
 
 UiLayout::UiLayout(IniReader * ini_reader, ResourceManager * resource_manager) {
   this->ini_reader = ini_reader;
@@ -52,8 +54,27 @@ void UiLayout::process_sections() {
       this->children.push_back((UiElement *) new UiText(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UILayout") {
       this->children.push_back((UiElement *) new UiLayout(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "UIListBox") {
+      this->children.push_back((UiElement *) new UiListBox(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "UIScrollBar") {
+      this->children.push_back((UiElement *) new UiScrollBar(this->ini_reader, this->resource_manager, section));
     } else {
       SDL_Log("Support for element type %s is not yet implemented", element_type.c_str());
+    }
+  }
+
+  // Link list boxes to the scroll bar they reference by id
+  for (UiElement * element : this->children) {
+    UiListBox * list_box = dynamic_cast<UiListBox*>(element);
+    if (list_box == nullptr || list_box->getScrollBarId() == 0) {
+      continue;
+    }
+    for (UiElement * other : this->children) {
+      UiScrollBar * scroll_bar = dynamic_cast<UiScrollBar*>(other);
+      if (scroll_bar != nullptr && scroll_bar->getId() == list_box->getScrollBarId()) {
+        list_box->setScrollBar(scroll_bar);
+        break;
+      }
     }
   }
 }
