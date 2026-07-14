@@ -32,13 +32,30 @@ private:
   uint64_t credits_page_start = 0;
   bool credits_active = false;
 
-  std::vector<std::string> freeform_map_icons;
+  typedef struct {
+    std::string file;
+    std::string picture;
+    std::string story_file;
+  } ScenarioInfo;
+
+  typedef struct {
+    std::string icon;
+    std::string description_file;
+    int starting_cash;
+  } FreeformMapInfo;
+
+  std::vector<ScenarioInfo> scenarios;
+  std::vector<FreeformMapInfo> freeform_maps;
+  int starting_cash = 0;
 
   bool handleTargetlessAction(UiAction);
   void updateCreditsPages();
   void loadScenarioList();
   void loadFreeformMapList();
+  void showSelectedScenario();
   void showSelectedFreeformMap();
+  void changeStartingCash(int amount);
+  void updateStartingCashText();
 };
 
 #endif // GAME_MANAGER_HPP

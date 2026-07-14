@@ -5,6 +5,8 @@
 
 #include "ui/UiListBox.hpp"
 #include "ui/UiImage.hpp"
+#include "ui/UiText.hpp"
+#include "ui/UiEditableText.hpp"
 
 GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager) {
   this->resource_manager = resource_manager;
@@ -140,8 +142,12 @@ void GameManager::Load(std::atomic<float> * progress, std::atomic<bool> * is_don
   *is_done = true;
 }
 
-// The id of the scenario list box in ui/scenario.lyt
+// The ids of the scenario list, picture, story and objectives elements in
+// ui/scenario.lyt
 #define SCENARIO_LIST_ID 50002
+#define SCENARIO_PICTURE_ID 50001
+#define SCENARIO_STORY_ID 50004
+#define SCENARIO_OBJECTIVES_ID 50006
 
 void GameManager::loadScenarioList() {
   if (!this->layouts.contains("scenario")) {
@@ -157,12 +163,14 @@ void GameManager::loadScenarioList() {
   std::sort(scenario_files.begin(), scenario_files.end());
 
   std::vector<std::string> scenario_names;
+  this->scenarios.clear();
   for (std::string scenario_file : scenario_files) {
     IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
     if (scenario_reader == nullptr) {
       continue;
     }
     uint32_t name_id = scenario_reader->getUnsignedInt("desc", "name", 0);
+    std::string picture = scenario_reader->get("desc", "picture");
     delete scenario_reader;
     if (name_id == 0) {
       // Scenarios without a name, like freeform.scn, are not shown in the list
@@ -173,17 +181,91 @@ void GameManager::loadScenarioList() {
       continue;
     }
     scenario_names.push_back(scenario_name);
+    // The story shown on the selection screen is the start.txt next to the
+    // scenario file
+    std::string story_file = "";
+    size_t last_slash = scenario_file.rfind('/');
+    if (last_slash != std::string::npos) {
+      story_file = scenario_file.substr(0, last_slash + 1) + "start.txt";
+    }
+    this->scenarios.push_back({scenario_file, picture, story_file});
   }
 
   SDL_Log("Found %i scenarios", (int) scenario_names.size());
   list_box->setItems(scenario_names);
 }
 
+void GameManager::showSelectedScenario() {
+  if (!this->layouts.contains("scenario")) {
+    return;
+  }
+  UiLayout * layout = this->layouts["scenario"];
+  UiListBox * list_box = dynamic_cast<UiListBox*>(layout->getChildWithId(SCENARIO_LIST_ID));
+  if (list_box == nullptr) {
+    return;
+  }
+  int selected_index = list_box->getSelectedIndex();
+  if (selected_index < 0 || selected_index >= (int) this->scenarios.size()) {
+    return;
+  }
+  ScenarioInfo scenario = this->scenarios[selected_index];
+
+  UiImage * picture = dynamic_cast<UiImage*>(layout->getChildWithId(SCENARIO_PICTURE_ID));
+  if (picture != nullptr && !scenario.picture.empty()) {
+    picture->setImagePath(scenario.picture);
+  }
+  UiText * story = dynamic_cast<UiText*>(layout->getChildWithId(SCENARIO_STORY_ID));
+  if (story != nullptr && !scenario.story_file.empty()) {
+    story->setText(this->resource_manager->getTextFileContent(scenario.story_file));
+  }
+
+  UiListBox * objectives = dynamic_cast<UiListBox*>(layout->getChildWithId(SCENARIO_OBJECTIVES_ID));
+  if (objectives != nullptr) {
+    std::vector<std::string> objective_texts;
+    IniReader * scenario_reader = this->resource_manager->getIniReader(scenario.file);
+    if (scenario_reader != nullptr) {
+      // A goal with display=1 in the duration section is shown as well
+      if (scenario_reader->getInt("duration", "display", 0) == 1) {
+        uint32_t text_id = scenario_reader->getUnsignedInt("duration", "text", 0);
+        std::string objective_text = this->resource_manager->getString(text_id);
+        if (!objective_text.empty()) {
+          objective_texts.push_back(objective_text);
+        }
+      }
+      for (std::string goal : scenario_reader->getList("goals", "goal")) {
+        uint32_t text_id = scenario_reader->getUnsignedInt(goal, "text", 0);
+        if (text_id == 0) {
+          continue;
+        }
+        std::string objective_text = this->resource_manager->getString(text_id);
+        if (!objective_text.empty()) {
+          objective_texts.push_back(objective_text);
+        }
+      }
+      delete scenario_reader;
+    }
+    objectives->setItems(objective_texts);
+  }
+}
+
 // The name of the freeform map selection layout in ui/gamescrn.lyt and the
-// ids of its map list and map picture elements in ui/mapselec.lyt
+// ids of its map list, map picture, map description, starting cash and
+// spinner elements in ui/mapselec.lyt
 #define FREEFORM_LAYOUT_NAME "load_maps_for_freeform"
 #define MAP_LIST_ID 11504
 #define MAP_PICTURE_ID 11501
+#define MAP_DESCRIPTION_ID 11507
+#define STARTING_CASH_ID 11510
+#define CASH_UP_SPINNER_ID 11511
+#define CASH_DOWN_SPINNER_ID 11512
+
+// The starting cash of scenario/freeform.scn, used when a map does not set
+// its own. The step and limits used by the spinners are not in the game
+// data, so they are defined here.
+#define DEFAULT_STARTING_CASH 50000
+#define STARTING_CASH_STEP 5000
+#define STARTING_CASH_MIN 5000
+#define STARTING_CASH_MAX 500000
 
 void GameManager::loadFreeformMapList() {
   if (!this->layouts.contains(FREEFORM_LAYOUT_NAME)) {
@@ -199,7 +281,7 @@ void GameManager::loadFreeformMapList() {
   std::sort(scenario_files.begin(), scenario_files.end());
 
   std::vector<std::string> map_names;
-  this->freeform_map_icons.clear();
+  this->freeform_maps.clear();
   for (std::string scenario_file : scenario_files) {
     IniReader * scenario_reader = this->resource_manager->getIniReader(scenario_file);
     if (scenario_reader == nullptr) {
@@ -207,6 +289,7 @@ void GameManager::loadFreeformMapList() {
     }
     uint32_t name_id = scenario_reader->getUnsignedInt("freeform", "name", 0);
     std::string icon = scenario_reader->get("freeform", "icon");
+    int starting_cash = scenario_reader->getInt("start", "setcash", DEFAULT_STARTING_CASH);
     delete scenario_reader;
     if (name_id == 0) {
       // Only scenarios with a freeform section are maps
@@ -217,7 +300,10 @@ void GameManager::loadFreeformMapList() {
       continue;
     }
     map_names.push_back(map_name);
-    this->freeform_map_icons.push_back(icon);
+    // The description shown on the selection screen is the txt file next to
+    // the scenario file
+    std::string description_file = scenario_file.substr(0, scenario_file.length() - 4) + ".txt";
+    this->freeform_maps.push_back({icon, description_file, starting_cash});
   }
 
   SDL_Log("Found %i freeform maps", (int) map_names.size());
@@ -230,15 +316,51 @@ void GameManager::showSelectedFreeformMap() {
   }
   UiLayout * layout = this->layouts[FREEFORM_LAYOUT_NAME];
   UiListBox * list_box = dynamic_cast<UiListBox*>(layout->getChildWithId(MAP_LIST_ID));
-  UiImage * picture = dynamic_cast<UiImage*>(layout->getChildWithId(MAP_PICTURE_ID));
-  if (list_box == nullptr || picture == nullptr) {
+  if (list_box == nullptr) {
     return;
   }
   int selected_index = list_box->getSelectedIndex();
-  if (selected_index < 0 || selected_index >= (int) this->freeform_map_icons.size()) {
+  if (selected_index < 0 || selected_index >= (int) this->freeform_maps.size()) {
     return;
   }
-  picture->setImagePath(this->freeform_map_icons[selected_index]);
+  FreeformMapInfo map = this->freeform_maps[selected_index];
+
+  UiImage * picture = dynamic_cast<UiImage*>(layout->getChildWithId(MAP_PICTURE_ID));
+  if (picture != nullptr && !map.icon.empty()) {
+    picture->setImagePath(map.icon);
+  }
+  UiText * description = dynamic_cast<UiText*>(layout->getChildWithId(MAP_DESCRIPTION_ID));
+  if (description != nullptr && !map.description_file.empty()) {
+    description->setText(this->resource_manager->getTextFileContent(map.description_file));
+  }
+  this->starting_cash = map.starting_cash;
+  this->updateStartingCashText();
+}
+
+void GameManager::changeStartingCash(int amount) {
+  this->starting_cash += amount;
+  if (this->starting_cash < STARTING_CASH_MIN) {
+    this->starting_cash = STARTING_CASH_MIN;
+  }
+  if (this->starting_cash > STARTING_CASH_MAX) {
+    this->starting_cash = STARTING_CASH_MAX;
+  }
+  this->updateStartingCashText();
+}
+
+void GameManager::updateStartingCashText() {
+  if (!this->layouts.contains(FREEFORM_LAYOUT_NAME)) {
+    return;
+  }
+  UiEditableText * cash_text = dynamic_cast<UiEditableText*>(this->layouts[FREEFORM_LAYOUT_NAME]->getChildWithId(STARTING_CASH_ID));
+  if (cash_text == nullptr) {
+    return;
+  }
+  std::string cash_string = std::to_string(this->starting_cash);
+  for (int position = (int) cash_string.length() - 3; position > 0; position -= 3) {
+    cash_string.insert(position, ",");
+  }
+  cash_text->setText("$" + cash_string);
 }
 
 // The credits screen consists of multiple page layouts which the original
@@ -283,6 +405,15 @@ bool GameManager::handleTargetlessAction(UiAction action) {
       break;
     case MAP_LIST_ID:
       this->showSelectedFreeformMap();
+      break;
+    case SCENARIO_LIST_ID:
+      this->showSelectedScenario();
+      break;
+    case CASH_UP_SPINNER_ID:
+      this->changeStartingCash(STARTING_CASH_STEP);
+      break;
+    case CASH_DOWN_SPINNER_ID:
+      this->changeStartingCash(-STARTING_CASH_STEP);
       break;
     default:
       break;
