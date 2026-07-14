@@ -9,6 +9,7 @@
 #include "../engine/ResourceManager.hpp"
 #include "../engine/CursorManager.hpp"
 #include "../ui/UiLayout.hpp"
+#include "MapView.hpp"
 #include "../ui/UiAction.hpp"
 
 class GameManager {
@@ -42,13 +43,17 @@ private:
     std::string icon;
     std::string description_file;
     int starting_cash;
+    std::string savegame;
   } FreeformMapInfo;
 
   std::vector<ScenarioInfo> scenarios;
   std::vector<FreeformMapInfo> freeform_maps;
   int starting_cash = 0;
 
+  MapView * map_view = nullptr;
+
   bool handleTargetlessAction(UiAction);
+  void startFreeformMap();
   void updateCreditsPages();
   void loadScenarioList();
   void loadFreeformMapList();

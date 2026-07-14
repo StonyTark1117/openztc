@@ -26,12 +26,25 @@ std::vector<Input> InputManager::getInputs() {
         break;
       case SDL_EVENT_KEY_DOWN:
         input.type = InputType::BUTTON;
-        input.event = InputEvent::NONE;
+        input.event = event.key.key == SDLK_ESCAPE ? InputEvent::BACK : InputEvent::NONE;
         break;
       case SDL_EVENT_MOUSE_BUTTON_DOWN:
         input.type = InputType::POSITIONED;
         SDL_GetMouseState(&input.position.x, &input.position.y);
         input.event = getEventFromMouseButton(event.button.button);
+        break;
+      case SDL_EVENT_MOUSE_BUTTON_UP:
+        if (event.button.button == SDL_BUTTON_LEFT) {
+          input.type = InputType::POSITIONED;
+          SDL_GetMouseState(&input.position.x, &input.position.y);
+          input.event = InputEvent::LEFT_RELEASE;
+        }
+        break;
+      case SDL_EVENT_MOUSE_WHEEL:
+        input.type = InputType::POSITIONED;
+        SDL_GetMouseState(&input.position.x, &input.position.y);
+        input.event = InputEvent::SCROLL;
+        input.scroll = event.wheel.y;
         break;
       case SDL_EVENT_MOUSE_MOTION:
         input.type = InputType::POSITIONED;

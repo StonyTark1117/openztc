@@ -14,6 +14,9 @@ GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cur
 }
 
 GameManager::~GameManager() {
+  if (this->map_view != nullptr) {
+    delete this->map_view;
+  }
   for(auto kv : layouts) {
     delete kv.second;
     layouts[kv.first] = nullptr;
@@ -21,6 +24,14 @@ GameManager::~GameManager() {
 }
 
 bool GameManager::HandleInputs(std::vector<Input> &inputs) {
+  if (this->map_view != nullptr) {
+    if (!this->map_view->handleInputs(inputs)) {
+      // Leaving the map returns to the menu
+      delete this->map_view;
+      this->map_view = nullptr;
+    }
+    return true;
+  }
   for (int layer=8; layer > (0 - 1); layer--) {
     for(auto kv : layouts) {
       UiLayout * layout = layouts[kv.first];
@@ -85,6 +96,10 @@ bool GameManager::HandleInputs(std::vector<Input> &inputs) {
 }
 
 void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
+  if (this->map_view != nullptr) {
+    this->map_view->draw(renderer, window_rect);
+    return;
+  }
   this->updateCreditsPages();
   for (int layer=0; layer < (8 + 1); layer++) {
     for(auto kv : layouts) {
@@ -281,6 +296,7 @@ void GameManager::fillObjectivePlaceholder(std::string &text, int value) {
 #define STARTING_CASH_ID 11510
 #define CASH_UP_SPINNER_ID 11511
 #define CASH_DOWN_SPINNER_ID 11512
+#define FREEFORM_PLAY_ID 11513
 #define DIFFICULTY_TEXT_ID 11531
 
 // The difficulty strings in the lang dlls. Which starting cash amounts they
@@ -322,6 +338,7 @@ void GameManager::loadFreeformMapList() {
     uint32_t name_id = scenario_reader->getUnsignedInt("freeform", "name", 0);
     std::string icon = scenario_reader->get("freeform", "icon");
     int starting_cash = scenario_reader->getInt("start", "setcash", DEFAULT_STARTING_CASH);
+    std::string savegame = scenario_reader->get("start", "savegame");
     delete scenario_reader;
     if (name_id == 0) {
       // Only scenarios with a freeform section are maps
@@ -335,7 +352,7 @@ void GameManager::loadFreeformMapList() {
     // The description shown on the selection screen is the txt file next to
     // the scenario file
     std::string description_file = scenario_file.substr(0, scenario_file.length() - 4) + ".txt";
-    this->freeform_maps.push_back({icon, description_file, starting_cash});
+    this->freeform_maps.push_back({icon, description_file, starting_cash, savegame});
   }
 
   SDL_Log("Found %i freeform maps", (int) map_names.size());
@@ -442,6 +459,30 @@ void GameManager::updateCreditsPages() {
   }
 }
 
+void GameManager::startFreeformMap() {
+  if (!this->layouts.contains(FREEFORM_LAYOUT_NAME)) {
+    return;
+  }
+  UiListBox * list_box = dynamic_cast<UiListBox*>(this->layouts[FREEFORM_LAYOUT_NAME]->getChildWithId(MAP_LIST_ID));
+  if (list_box == nullptr) {
+    return;
+  }
+  int selected_index = list_box->getSelectedIndex();
+  if (selected_index < 0 || selected_index >= (int) this->freeform_maps.size()) {
+    return;
+  }
+  std::string savegame = this->freeform_maps[selected_index].savegame;
+  if (savegame.empty()) {
+    return;
+  }
+  MapView * view = new MapView(this->resource_manager);
+  if (!view->loadMap(savegame)) {
+    delete view;
+    return;
+  }
+  this->map_view = view;
+}
+
 bool GameManager::handleTargetlessAction(UiAction action) {
   switch (action.source) {
     case (int) ActionSource::MAIN_MENU_EXIT:
@@ -452,6 +493,9 @@ bool GameManager::handleTargetlessAction(UiAction action) {
       break;
     case SCENARIO_LIST_ID:
       this->showSelectedScenario();
+      break;
+    case FREEFORM_PLAY_ID:
+      this->startFreeformMap();
       break;
     case CASH_UP_SPINNER_ID:
       this->changeStartingCash(STARTING_CASH_STEP);

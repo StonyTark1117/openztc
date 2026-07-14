@@ -136,6 +136,23 @@ if (BUILD_TOOLS_ZOO)
     add_executable(dumpzoo tools/dumpzoo.cpp src/engine/ZooFile.cpp)
     target_include_directories(dumpzoo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include)
     target_link_libraries(dumpzoo PRIVATE SDL3::SDL3-static)
+
+    file(GLOB_RECURSE MAPSHOT_SRC src/engine/*.cpp src/game/MapView.cpp)
+    add_executable(mapshot tools/mapshot.cpp ${MAPSHOT_SRC})
+    target_include_directories(mapshot PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pe-resource-loader/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL_image/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL_ttf/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL_mixer/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libzip/include)
+    target_link_libraries(mapshot PRIVATE
+        pe_resource_loader_static
+        SDL3::SDL3-static
+        SDL3_image::SDL3_image-static
+        SDL3_ttf::SDL3_ttf-static
+        SDL3_mixer::SDL3_mixer-static
+        libzip::zip)
 endif()
 
 option(BUILD_TESTS "Build the unit tests" OFF)
