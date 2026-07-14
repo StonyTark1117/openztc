@@ -69,11 +69,17 @@ void ResourceManager::load_resource_map(std::atomic<float> * progress, std::atom
     SDL_Log("Resource path after fixPath %s", path.c_str());
     if (path.empty())
       continue;
+    // Sort the archives so which archive provides a resource does not depend
+    // on the unspecified directory iteration order
+    std::vector<std::string> archives;
     for (std::filesystem::directory_entry archive : std::filesystem::directory_iterator(path)) {
-      current_archive = archive.path().string();
-      if (Utils::getFileExtension(current_archive) != "ZTD") {
-        continue;
+      if (Utils::getFileExtension(archive.path().string()) == "ZTD") {
+        archives.push_back(archive.path().string());
       }
+    }
+    std::sort(archives.begin(), archives.end());
+    for (std::string archive : archives) {
+      current_archive = archive;
       for (std::string file : ZtdFile::getFileList(current_archive)) {
         if (resource_map.count(file) == 0) {
           resource_map[file] = current_archive;
@@ -125,6 +131,7 @@ void ResourceManager::load_string_map(std::atomic<float> * progress, std::atomic
       *progress = 100.0f;
     }
   }
+  SDL_Log("Loaded %i strings", (int) this->string_map.size());
   *is_done = true;
 }
 
@@ -231,6 +238,16 @@ SDL_Texture *ResourceManager::getStringTexture(SDL_Renderer * renderer, const in
 
 std::string ResourceManager::getString(uint32_t string_id) {
   return this->string_map[string_id];
+}
+
+std::vector<std::string> ResourceManager::getResourceNamesWithExtension(const std::string &extension) {
+  std::vector<std::string> resource_names;
+  for (auto resource_entry : this->resource_map) {
+    if (Utils::getFileExtension(resource_entry.first) == extension) {
+      resource_names.push_back(resource_entry.first);
+    }
+  }
+  return resource_names;
 }
 
 void ResourceManager::PlayMenuMusic() {
