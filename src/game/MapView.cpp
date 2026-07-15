@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
 
 #include "../engine/CompassDirection.hpp"
 #include "../engine/Utils.hpp"
@@ -384,8 +385,22 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   // own batches, drawn after all the base tiles.
   std::unordered_map<int, std::vector<SDL_Vertex>> batches;
   std::unordered_map<int, std::vector<int>> batch_indices;
-  std::unordered_map<int, std::vector<SDL_Vertex>> blend_batches;
-  std::unordered_map<int, std::vector<int>> blend_indices;
+  std::map<int, std::vector<SDL_Vertex>> blend_batches;
+  std::map<int, std::vector<int>> blend_indices;
+
+  // The tile type at a position, or -1 off the map
+  auto typeAt = [&](int x, int y) -> int {
+    if (x < 0 || y < 0 || x >= (int) width || y >= (int) height) {
+      return -1;
+    }
+    return (int) this->zoo->getTile(x, y).type;
+  };
+  // Whether any of the four tiles meeting at grid corner (cx, cy) has the
+  // wanted type
+  auto cornerTouchesType = [&](int cx, int cy, int wanted) -> bool {
+    return typeAt(cx - 1, cy - 1) == wanted || typeAt(cx, cy - 1) == wanted ||
+           typeAt(cx - 1, cy) == wanted || typeAt(cx, cy) == wanted;
+  };
 
   for (uint32_t tile_y = 0; tile_y < height; tile_y++) {
     for (uint32_t tile_x = 0; tile_x < width; tile_x++) {
@@ -414,26 +429,42 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         continue;
       }
 
-      // Slope shading: tiles facing away from the light are darker
-      float slope = (corner_h[0] - corner_h[2]) * 0.15f;
-      float brightness = 0.85f + slope;
-      if (brightness < 0.4f) {
-        brightness = 0.4f;
+      // Slope shading per corner, like the original's per vertex lit
+      // terrain mesh: slopes shade smoothly across tile boundaries
+      // instead of stepping per tile. Flat terrain renders at roughly
+      // 0.95 of the texture color (measured on fshore.zoo water against
+      // depwater.tga).
+      float corner_bright[4];
+      for (int i = 0; i < 4; i++) {
+        int cx = (int) tile_x + corner_offsets[i][0];
+        int cy = (int) tile_y + corner_offsets[i][1];
+        auto clamped_h = [&](int hx, int hy) -> float {
+          hx = std::clamp(hx, 0, (int) width);
+          hy = std::clamp(hy, 0, (int) height);
+          return this->cornerHeight((uint32_t) hx, (uint32_t) hy);
+        };
+        float gradient_x = (clamped_h(cx + 1, cy) - clamped_h(cx - 1, cy)) * 0.5f;
+        float gradient_y = (clamped_h(cx, cy + 1) - clamped_h(cx, cy - 1)) * 0.5f;
+        corner_bright[i] = std::clamp(0.95f - 0.15f * (gradient_x + gradient_y), 0.4f, 1.0f);
       }
-      if (brightness > 1.0f) {
-        brightness = 1.0f;
-      }
-      SDL_FColor color = {brightness, brightness, brightness, 1.0f};
+      float brightness = (corner_bright[0] + corner_bright[1] + corner_bright[2] + corner_bright[3]) / 4.0f;
+
+      // Mirror the texture stamp per tile by a position hash so large
+      // same type fields do not show a repeating grid
+      uint32_t stamp = (tile_x * 73856093u) ^ (tile_y * 19349663u);
+      float u0 = (stamp & 1) ? 1.0f : 0.0f;
+      float v0 = (stamp & 2) ? 1.0f : 0.0f;
+      const SDL_FPoint texture_coordinates[4] = {
+        {u0, v0}, {1.0f - u0, v0}, {1.0f - u0, 1.0f - v0}, {u0, 1.0f - v0}};
 
       int type = this->terrain_textures.contains(tile.type) ? tile.type : 0;
       std::vector<SDL_Vertex> &vertices = batches[type];
       std::vector<int> &indices = batch_indices[type];
       int base = (int) vertices.size();
-      const SDL_FPoint texture_coordinates[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
       for (int i = 0; i < 4; i++) {
         SDL_Vertex vertex;
         vertex.position = corners[i];
-        vertex.color = color;
+        vertex.color = {corner_bright[i], corner_bright[i], corner_bright[i], 1.0f};
         vertex.tex_coord = texture_coordinates[i];
         vertices.push_back(vertex);
       }
@@ -444,45 +475,69 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       indices.push_back(base + 2);
       indices.push_back(base + 3);
 
-      // Where a different terrain type borders this tile its texture
-      // bleeds in, fading from the shared edge to the tile center. Lower
-      // type numbers paint over higher ones so each boundary blends once.
+      // Where a different terrain type touches this tile — including
+      // diagonally — its texture splats across the whole tile, full at the
+      // corners that touch it and fading to nothing at the ones that do
+      // not, the way the original's blended terrain mesh looks. Lower type
+      // numbers paint over higher ones, so each overlay type is gathered
+      // once from all eight neighbors.
+      const int around_offsets[8][2] = {{0, -1}, {1, -1}, {1, 0},  {1, 1},
+                                        {0, 1},  {-1, 1}, {-1, 0}, {-1, -1}};
+      int overlay_types[8];
+      int overlay_count = 0;
+      for (int i = 0; i < 8; i++) {
+        int neighbor_type = typeAt((int) tile_x + around_offsets[i][0], (int) tile_y + around_offsets[i][1]);
+        if (neighbor_type < 0 || neighbor_type >= (int) tile.type ||
+            !this->terrain_textures.contains(neighbor_type)) {
+          continue;
+        }
+        bool seen = false;
+        for (int j = 0; j < overlay_count; j++) {
+          if (overlay_types[j] == neighbor_type) {
+            seen = true;
+            break;
+          }
+        }
+        if (!seen) {
+          overlay_types[overlay_count++] = neighbor_type;
+        }
+      }
       SDL_FPoint tile_center = {
         (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4.0f,
         (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4.0f,
       };
-      const int edge_corners[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
-      const int neighbor_offsets[4][2] = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
-      for (int edge = 0; edge < 4; edge++) {
-        int neighbor_x = (int) tile_x + neighbor_offsets[edge][0];
-        int neighbor_y = (int) tile_y + neighbor_offsets[edge][1];
-        if (neighbor_x < 0 || neighbor_y < 0 || neighbor_x >= (int) width || neighbor_y >= (int) height) {
-          continue;
+      for (int overlay = 0; overlay < overlay_count; overlay++) {
+        int overlay_type = overlay_types[overlay];
+        float corner_alpha[4];
+        float alpha_sum = 0.0f;
+        for (int i = 0; i < 4; i++) {
+          int cx = (int) tile_x + corner_offsets[i][0];
+          int cy = (int) tile_y + corner_offsets[i][1];
+          corner_alpha[i] = cornerTouchesType(cx, cy, overlay_type) ? 1.0f : 0.0f;
+          alpha_sum += corner_alpha[i];
         }
-        int neighbor_type = this->zoo->getTile(neighbor_x, neighbor_y).type;
-        if (neighbor_type >= tile.type || !this->terrain_textures.contains(neighbor_type)) {
-          continue;
-        }
-        std::vector<SDL_Vertex> &blend_vertices = blend_batches[neighbor_type];
-        std::vector<int> &blend_index_list = blend_indices[neighbor_type];
+        std::vector<SDL_Vertex> &blend_vertices = blend_batches[overlay_type];
+        std::vector<int> &blend_index_list = blend_indices[overlay_type];
         int blend_base = (int) blend_vertices.size();
-        SDL_FColor edge_color = {brightness, brightness, brightness, 0.85f};
-        SDL_FColor center_color = {brightness, brightness, brightness, 0.0f};
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 4; i++) {
           SDL_Vertex vertex;
-          vertex.position = corners[edge_corners[edge][i]];
-          vertex.color = edge_color;
-          vertex.tex_coord = texture_coordinates[edge_corners[edge][i]];
+          vertex.position = corners[i];
+          vertex.color = {corner_bright[i], corner_bright[i], corner_bright[i], corner_alpha[i]};
+          vertex.tex_coord = texture_coordinates[i];
           blend_vertices.push_back(vertex);
         }
+        // A center vertex keeps the interpolation symmetric across the
+        // quad instead of leaning on one diagonal
         SDL_Vertex center_vertex;
         center_vertex.position = tile_center;
-        center_vertex.color = center_color;
+        center_vertex.color = {brightness, brightness, brightness, alpha_sum / 4.0f};
         center_vertex.tex_coord = {0.5f, 0.5f};
         blend_vertices.push_back(center_vertex);
-        blend_index_list.push_back(blend_base);
-        blend_index_list.push_back(blend_base + 1);
-        blend_index_list.push_back(blend_base + 2);
+        for (int i = 0; i < 4; i++) {
+          blend_index_list.push_back(blend_base + i);
+          blend_index_list.push_back(blend_base + ((i + 1) % 4));
+          blend_index_list.push_back(blend_base + 4);
+        }
       }
     }
   }
@@ -492,9 +547,12 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     SDL_RenderGeometry(renderer, texture, batch.second.data(), (int) batch.second.size(),
                        batch_indices[batch.first].data(), (int) batch_indices[batch.first].size());
   }
-  for (auto &batch : blend_batches) {
-    SDL_RenderGeometry(renderer, this->terrain_textures[batch.first], batch.second.data(), (int) batch.second.size(),
-                       blend_indices[batch.first].data(), (int) blend_indices[batch.first].size());
+  // Higher type numbers first so the lower, higher priority types land on
+  // top where overlays stack
+  for (auto batch = blend_batches.rbegin(); batch != blend_batches.rend(); ++batch) {
+    SDL_RenderGeometry(renderer, this->terrain_textures[batch->first], batch->second.data(),
+                       (int) batch->second.size(), blend_indices[batch->first].data(),
+                       (int) blend_indices[batch->first].size());
   }
 
   this->drawObjects(renderer, window_rect, center_x, center_y);
