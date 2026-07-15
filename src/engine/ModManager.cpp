@@ -18,6 +18,7 @@ ModManager::ModManager(const std::string &mods_directory) {
 
 void ModManager::load() {
   this->mods.clear();
+  this->changed_since_load = false;
   if (!std::filesystem::is_directory(this->mods_directory)) {
     SDL_Log("No mods directory at %s", this->mods_directory.c_str());
     return;
@@ -86,6 +87,7 @@ void ModManager::toggle(int index) {
     return;
   }
   this->mods[index].enabled = !this->mods[index].enabled;
+  this->changed_since_load = true;
   this->save();
 }
 
@@ -95,6 +97,7 @@ bool ModManager::move(int index, int direction) {
     return false;
   }
   std::swap(this->mods[index], this->mods[other]);
+  this->changed_since_load = true;
   this->save();
   return true;
 }
@@ -176,6 +179,7 @@ bool ModManager::applyLoadout(const std::string &name) {
   }
   ordered.insert(ordered.end(), this->mods.begin(), this->mods.end());
   this->mods = ordered;
+  this->changed_since_load = true;
   this->save();
   return true;
 }

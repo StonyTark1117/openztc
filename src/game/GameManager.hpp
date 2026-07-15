@@ -28,6 +28,10 @@ public:
   // while the game is paused
   void TickSimulation();
 
+  // Set when closing the mod screen after changes: the main loop tears
+  // everything down and reloads the resources with the new mod set
+  bool ReloadRequested() { return this->reload_requested; }
+
 private:
   std::unordered_map<std::string, UiLayout*> layouts;
   int id = 0;
@@ -35,6 +39,7 @@ private:
   ResourceManager * resource_manager = nullptr;
   CursorManager * cursor_manager = nullptr;
   ModManager * mod_manager = nullptr;
+  bool reload_requested = false;
 
   size_t credits_page = 0;
   uint64_t credits_page_start = 0;

@@ -21,6 +21,13 @@ ResourceManager::~ResourceManager() {
   if (this->menu_music != nullptr){
     MIX_DestroyAudio(this->menu_music);
   }
+  if (this->menu_music_track != nullptr) {
+    MIX_DestroyTrack(this->menu_music_track);
+  }
+  if (this->mixer != nullptr) {
+    // The manager can be torn down and rebuilt for a mod reload
+    MIX_DestroyMixer(this->mixer);
+  }
   for (auto animation_entry : this->animation_map) {
     if (animation_entry.second != nullptr) {
       delete animation_entry.second;

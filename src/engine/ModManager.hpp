@@ -33,6 +33,10 @@ public:
   // Full paths of the enabled archives in load order
   std::vector<std::string> getEnabledArchives();
 
+  // Whether the state changed since the last load, meaning a resource
+  // reload would pick up different mods
+  bool hasChangedSinceLoad() { return this->changed_since_load; }
+
   // How to list the resource names inside an archive, usually
   // ZtdFile::getFileList. Injected to keep the archive format out of here.
   void setArchiveLister(std::function<std::vector<std::string>(const std::string &)> lister) { this->archive_lister = lister; }
@@ -51,6 +55,7 @@ public:
 private:
   std::string mods_directory;
   std::string state_file;
+  bool changed_since_load = false;
   std::vector<ModInfo> mods;
   std::function<std::vector<std::string>(const std::string &)> archive_lister;
 };

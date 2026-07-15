@@ -22,9 +22,6 @@ int main(int argc, char **argv) {
   Config config;
   ModManager mod_manager(Utils::getZooTycoonPath() + "/mods");
   mod_manager.setArchiveLister(ZtdFile::getFileList);
-  mod_manager.load();
-  ResourceManager resource_manager(&config);
-  resource_manager.setModArchives(mod_manager.getEnabledArchives());
   InputManager input_manager;
   std::vector<Input> inputs;
 
@@ -34,45 +31,59 @@ int main(int argc, char **argv) {
     // in an openztc section of zoo.ini turns this off.
     SDL_DisableScreenSaver();
   }
-  CursorManager cursor_manager(&resource_manager);
-  cursor_manager.setCursor(CursorRole::DEFAULT);
-  GameManager game_manager(&resource_manager, &cursor_manager, &mod_manager);
 
-  LoadScreen::run(&window, &config, &resource_manager, &game_manager);
+  // Applying mod changes tears the resources and the game down and runs
+  // the load screen again in the same window
+  bool run_again = true;
+  while (run_again) {
+    run_again = false;
+    mod_manager.load();
+    ResourceManager resource_manager(&config);
+    resource_manager.setModArchives(mod_manager.getEnabledArchives());
+    CursorManager cursor_manager(&resource_manager);
+    cursor_manager.setCursor(CursorRole::DEFAULT);
+    GameManager game_manager(&resource_manager, &cursor_manager, &mod_manager);
 
-  // The renderer runs as fast as the frame limiter allows, the simulation
-  // advances in fixed ticks through an accumulator
-  const uint64_t tick_duration_ms = 1000 / Simulation::TICKS_PER_SECOND;
-  uint64_t previous_time = SDL_GetTicks();
-  uint64_t tick_accumulator = 0;
+    LoadScreen::run(&window, &config, &resource_manager, &game_manager);
 
-  int running = 1;
-  while (running > 0) {
-    window.clear();
-    inputs = input_manager.getInputs();
-    for (Input input : inputs) {
-      if (input.event == InputEvent::QUIT) {
-        running = 0;
+    // The renderer runs as fast as the frame limiter allows, the simulation
+    // advances in fixed ticks through an accumulator
+    const uint64_t tick_duration_ms = 1000 / Simulation::TICKS_PER_SECOND;
+    uint64_t previous_time = SDL_GetTicks();
+    uint64_t tick_accumulator = 0;
+
+    int running = 1;
+    while (running > 0) {
+      window.clear();
+      inputs = input_manager.getInputs();
+      for (Input input : inputs) {
+        if (input.event == InputEvent::QUIT) {
+          running = 0;
+        }
       }
-    }
-    if (running) {
-      running = game_manager.HandleInputs(inputs);
+      if (running) {
+        running = game_manager.HandleInputs(inputs);
+        if (game_manager.ReloadRequested()) {
+          running = 0;
+          run_again = true;
+        }
 
-      uint64_t current_time = SDL_GetTicks();
-      tick_accumulator += current_time - previous_time;
-      previous_time = current_time;
-      // Avoid a tick avalanche after a stall, like the window being dragged
-      if (tick_accumulator > 1000) {
-        tick_accumulator = 1000;
+        uint64_t current_time = SDL_GetTicks();
+        tick_accumulator += current_time - previous_time;
+        previous_time = current_time;
+        // Avoid a tick avalanche after a stall, like the window being dragged
+        if (tick_accumulator > 1000) {
+          tick_accumulator = 1000;
+        }
+        while (tick_accumulator >= tick_duration_ms) {
+          game_manager.TickSimulation();
+          tick_accumulator -= tick_duration_ms;
+        }
+
+        game_manager.Draw(window.renderer, window.getWindowRect());
+
+        window.present();
       }
-      while (tick_accumulator >= tick_duration_ms) {
-        game_manager.TickSimulation();
-        tick_accumulator -= tick_duration_ms;
-      }
-
-      game_manager.Draw(window.renderer, window.getWindowRect());
-
-      window.present();
     }
   }
 

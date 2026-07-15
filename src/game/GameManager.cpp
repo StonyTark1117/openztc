@@ -851,7 +851,7 @@ void GameManager::showSelectedMod() {
       }
     }
     if (conflicts.empty()) {
-      lines.push_back("Changes apply on the next launch");
+      lines.push_back("Done applies the changes");
     }
   }
   info->setItems(lines);
@@ -914,6 +914,9 @@ bool GameManager::handleTargetlessAction(UiAction action) {
     case MOD_DONE_BUTTON_ID:
       if (this->layouts.contains(MOD_LAYOUT_NAME)) {
         this->layouts[MOD_LAYOUT_NAME]->setActive(false);
+      }
+      if (this->mod_manager != nullptr && this->mod_manager->hasChangedSinceLoad()) {
+        this->reload_requested = true;
       }
       break;
     default:
