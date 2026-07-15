@@ -431,6 +431,8 @@ void GameManager::changeStartingCash(int amount) {
   if (this->starting_cash > config->getFreeformCashMax()) {
     this->starting_cash = config->getFreeformCashMax();
   }
+  // The original persists the chosen amount in zoo.ini
+  config->setFreeformStartingCash(this->starting_cash);
   this->updateStartingCashText();
 }
 

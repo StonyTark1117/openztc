@@ -27,8 +27,13 @@ public:
   int getFreeformCashIncrement();
   int getFreeformCashMin();
   int getFreeformCashMax();
+  // The original writes the chosen amount back to zoo.ini, so it persists
+  // between sessions. Only that one line changes, the rest of the file is
+  // preserved as it is.
+  void setFreeformStartingCash(int value);
 private:
   IniReader * reader = NULL;
+  std::string file_path = "";
 };
 
 #endif // CONFIG_HPP

@@ -1,11 +1,14 @@
 #include "Config.hpp"
 
+#include <fstream>
+
 #include <SDL3/SDL.h>
 
 #include "Utils.hpp"
 
 Config::Config(const std::string &filename) {
-  this->reader = new IniReader(Utils::fixPath(Utils::getZooTycoonPath() + "/" + filename));
+  this->file_path = Utils::fixPath(Utils::getZooTycoonPath() + "/" + filename);
+  this->reader = new IniReader(this->file_path);
 }
 
 Config::~Config(){
@@ -102,4 +105,54 @@ int Config::getFreeformCashMin() {
 
 int Config::getFreeformCashMax() {
   return reader->getInt("UI", "MSMaxCash", 500000);
+}
+
+void Config::setFreeformStartingCash(int value) {
+  // Rewrite only the MSStartingCash line inside the UI section, keeping
+  // every other byte of the user's zoo.ini as it is. The file is written
+  // in place because it may be reached through a symlink.
+  std::ifstream in(this->file_path, std::ios::binary);
+  if (!in.is_open()) {
+    SDL_Log("Could not open %s to persist the starting cash", this->file_path.c_str());
+    return;
+  }
+  std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  in.close();
+
+  std::string output;
+  output.reserve(content.length() + 16);
+  bool in_ui_section = false;
+  bool replaced = false;
+  size_t position = 0;
+  while (position < content.length()) {
+    size_t line_end = content.find('\n', position);
+    size_t next = line_end == std::string::npos ? content.length() : line_end + 1;
+    std::string line = content.substr(position, next - position);
+    std::string trimmed = line;
+    while (!trimmed.empty() && (trimmed.back() == '\n' || trimmed.back() == '\r')) {
+      trimmed.pop_back();
+    }
+    std::string lower = Utils::string_to_lower(trimmed);
+    if (!lower.empty() && lower[0] == '[') {
+      in_ui_section = lower == "[ui]";
+    } else if (in_ui_section && !replaced && lower.rfind("msstartingcash", 0) == 0) {
+      // Keep the line ending style of the original line
+      std::string ending = line.substr(trimmed.length());
+      line = "MSStartingCash=" + std::to_string(value) + ending;
+      replaced = true;
+    }
+    output += line;
+    position = next;
+  }
+  if (!replaced) {
+    SDL_Log("No MSStartingCash line in %s, not persisting the starting cash", this->file_path.c_str());
+    return;
+  }
+
+  std::ofstream out(this->file_path, std::ios::binary | std::ios::trunc);
+  if (!out.is_open()) {
+    SDL_Log("Could not write %s to persist the starting cash", this->file_path.c_str());
+    return;
+  }
+  out << output;
 }
