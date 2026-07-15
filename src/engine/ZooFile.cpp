@@ -222,7 +222,8 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
     tile.height = (int32_t) readUint32(data, p);
     tile.shape = data[p + 4];
     tile.type = data[p + 5];
-    memcpy(tile.unknown, data + p + 6, 4);
+    tile.edges = data[p + 6];
+    memcpy(tile.padding, data + p + 7, 3);
     zoo->tiles.push_back(tile);
   }
 
@@ -336,7 +337,8 @@ std::vector<uint8_t> ZooFile::serialize() const {
     data.push_back((height >> 24) & 0xFF);
     data.push_back(tile.shape);
     data.push_back(tile.type);
-    data.insert(data.end(), tile.unknown, tile.unknown + 4);
+    data.push_back(tile.edges);
+    data.insert(data.end(), tile.padding, tile.padding + 3);
   }
   data.insert(data.end(), this->object_section.begin(), this->object_section.end());
   return data;

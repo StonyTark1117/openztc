@@ -197,6 +197,29 @@ Still planned, taking inspiration from
 - Creating and editing loadouts in the screen itself.
 - Apply changes without restarting (resource map reload).
 
+### Aquarium completeness (Marine Mania)
+
+Aquatic exhibits are the furthest from vanilla right now. A tank in the
+original is a filled body of water: a translucent surface at the fill
+level, animals swimming under and breaking it, show tanks with stands
+and performances. Ours renders the dry basin — tank walls, a dug-out
+floor with the decorations — and since the swim-state work the animals
+at least appear via their surface-swim art.
+
+What vanilla has that we do not yet:
+
+- The tank water itself: fill level (stored in the tank exhibit
+  records; show tanks differ), the translucent surface, and the tinted
+  underwater rendering of everything below it.
+- Sub/surface animal states driven by depth: `subswim` under water,
+  `surfswim` breaking the surface, dive and rise transitions.
+- Tank equipment behavior: filters, show tank stands, the show
+  schedule from the tank records.
+- Guests watching through tank walls / from bleachers.
+
+*Acceptance*: the med_kids dolphin show tank and hammerhead tank,
+side by side with the original, read as the same filled aquarium.
+
 ### 7. Later
 
 - Save writing (round-trip a vanilla save), oversized custom maps,

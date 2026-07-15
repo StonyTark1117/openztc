@@ -5,13 +5,23 @@
 #include <string>
 #include <vector>
 
-// One terrain tile, 10 bytes in the file
-// Heights are signed, water sits below zero
+// One terrain tile, 10 bytes in the file. Heights are signed, water sits
+// below zero. The stored height is the NW corner's (the corner at the
+// tile's own x, y); shape holds each corner's height above a base level
+// as 2 bit fields (bits 1:0 NW, 3:2 SW, 5:4 SE, 7:6 NE), with
+// base = height - NW delta. The edges byte is derived data the original
+// precomputes from the corner heights of each tile pair: 2 bit fields
+// per edge (bits 1:0 W, 3:2 S, 5:4 E, 7:6 N), 0 flat, 1 sloped, 2 cliff
+// with the neighbor higher, 3 cliff with the neighbor lower. A few stale
+// edge values exist in real saves, so renderers should derive from the
+// corners instead of trusting it; writers must recompute it after any
+// terrain edit. The padding bytes are zero in every shipped map and save.
 typedef struct {
   int32_t height;
   uint8_t shape;
   uint8_t type;
-  uint8_t unknown[4];
+  uint8_t edges;
+  uint8_t padding[3];
 } ZooTerrainTile;
 
 // One placed object. Positions are in 64ths of a tile. Only the fields

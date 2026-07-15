@@ -76,7 +76,8 @@ int main(int argc, char ** argv) {
         printf("  y=%3d ", ty);
         for (int tx = terrain_x; tx < terrain_x + terrain_w && tx < (int) zoo->getWidth(); tx++) {
           const ZooTerrainTile &tile = zoo->getTile(tx, ty);
-          printf("%3d/%02x/%02x ", tile.height, tile.shape, tile.type);
+          printf("%3d/%02x/%02x+%02x%02x%02x%02x ", tile.height, tile.shape, tile.type,
+                 tile.edges, tile.padding[0], tile.padding[1], tile.padding[2]);
         }
         printf("\n");
       }
