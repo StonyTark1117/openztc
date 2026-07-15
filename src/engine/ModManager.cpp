@@ -107,3 +107,28 @@ std::vector<std::string> ModManager::getEnabledArchives() {
   }
   return archives;
 }
+
+std::vector<std::string> ModManager::getConflicts(int index) {
+  std::vector<std::string> conflicts;
+  if (!this->archive_lister || index < 0 || index >= (int) this->mods.size()) {
+    return conflicts;
+  }
+  std::vector<std::string> own_files = this->archive_lister(this->mods_directory + "/" + this->mods[index].file_name);
+  std::sort(own_files.begin(), own_files.end());
+  for (int other = 0; other < (int) this->mods.size(); other++) {
+    if (other == index || !this->mods[other].enabled) {
+      continue;
+    }
+    for (std::string file : this->archive_lister(this->mods_directory + "/" + this->mods[other].file_name)) {
+      if (file.empty() || file.back() == '/') {
+        // Directory entries are not resources
+        continue;
+      }
+      if (std::binary_search(own_files.begin(), own_files.end(), file)) {
+        conflicts.push_back(this->mods[other].file_name);
+        break;
+      }
+    }
+  }
+  return conflicts;
+}

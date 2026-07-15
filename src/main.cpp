@@ -6,6 +6,7 @@
 #include "engine/Window.hpp"
 #include "engine/ResourceManager.hpp"
 #include "engine/Utils.hpp"
+#include "engine/ZtdFile.hpp"
 #include "engine/CursorManager.hpp"
 #include "game/LoadScreen.hpp"
 #include "engine/InputManager.hpp"
@@ -20,6 +21,7 @@ int main(int argc, char **argv) {
 
   Config config;
   ModManager mod_manager(Utils::getZooTycoonPath() + "/mods");
+  mod_manager.setArchiveLister(ZtdFile::getFileList);
   mod_manager.load();
   ResourceManager resource_manager(&config);
   resource_manager.setModArchives(mod_manager.getEnabledArchives());

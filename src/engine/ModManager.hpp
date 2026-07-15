@@ -1,6 +1,7 @@
 #ifndef MOD_MANAGER_HPP
 #define MOD_MANAGER_HPP
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -32,10 +33,20 @@ public:
   // Full paths of the enabled archives in load order
   std::vector<std::string> getEnabledArchives();
 
+  // How to list the resource names inside an archive, usually
+  // ZtdFile::getFileList. Injected to keep the archive format out of here.
+  void setArchiveLister(std::function<std::vector<std::string>(const std::string &)> lister) { this->archive_lister = lister; }
+
+  // Names of other enabled mods sharing resource names with the mod at
+  // index. Earlier mods win, so mods before it override it and mods after
+  // it are overridden by it.
+  std::vector<std::string> getConflicts(int index);
+
 private:
   std::string mods_directory;
   std::string state_file;
   std::vector<ModInfo> mods;
+  std::function<std::vector<std::string>(const std::string &)> archive_lister;
 };
 
 #endif // MOD_MANAGER_HPP

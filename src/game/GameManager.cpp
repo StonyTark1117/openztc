@@ -685,7 +685,25 @@ void GameManager::showSelectedMod() {
   } else {
     const ModInfo &mod = this->mod_manager->getMods()[selected_index];
     lines.push_back(mod.file_name + (mod.enabled ? " is enabled" : " is disabled"));
-    lines.push_back("Changes apply on the next launch");
+    // Shared resource names with other enabled mods, the earlier mod wins
+    std::vector<std::string> conflicts = this->mod_manager->getConflicts(selected_index);
+    for (const std::string &other : conflicts) {
+      int other_index = 0;
+      for (const ModInfo &candidate : this->mod_manager->getMods()) {
+        if (candidate.file_name == other) {
+          break;
+        }
+        other_index++;
+      }
+      if (other_index < selected_index) {
+        lines.push_back("Overridden by " + other);
+      } else {
+        lines.push_back("Overrides " + other);
+      }
+    }
+    if (conflicts.empty()) {
+      lines.push_back("Changes apply on the next launch");
+    }
   }
   info->setItems(lines);
 }

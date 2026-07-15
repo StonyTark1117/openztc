@@ -86,3 +86,25 @@ TEST_CASE("moving past the ends does nothing") {
   CHECK(manager.move(1, -1));
   CHECK(manager.getMods()[0].file_name == "b.ztd");
 }
+
+TEST_CASE("conflicts list other enabled mods sharing resource names") {
+  ModsDirectory dir({"a.ztd", "b.ztd", "c.ztd"});
+  ModManager manager(dir.path);
+  manager.setArchiveLister([&dir](const std::string &archive) -> std::vector<std::string> {
+    if (archive == dir.path + "/a.ztd") {
+      return {"shared/file.tga", "a-only.txt"};
+    }
+    if (archive == dir.path + "/b.ztd") {
+      return {"shared/file.tga", "b-only.txt"};
+    }
+    return {"c-only.txt", "some-directory/"};
+  });
+  manager.load();
+  std::vector<std::string> conflicts = manager.getConflicts(0);
+  REQUIRE(conflicts.size() == 1);
+  CHECK(conflicts[0] == "b.ztd");
+  CHECK(manager.getConflicts(2).empty());
+  // Disabled mods do not conflict
+  manager.toggle(1);
+  CHECK(manager.getConflicts(0).empty());
+}
