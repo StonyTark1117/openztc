@@ -986,16 +986,18 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     float edge_end = 0.0f;
     bool y_run = false;
     this->fenceEdgeHeights(object, &edge_start, &edge_end, &y_run);
-    // The 30 degree art spans one height step. Edges dropping further
-    // render as a flat piece sitting at the LOW end (traced from the
-    // original's coping line on deathmtn's 3->1 drop): the coping jumps
-    // down at the piece boundary and the neighboring high piece's end
-    // covers the join.
-    float edge_span = edge_end - edge_start;
-    if (edge_span == 1.0f) {
-      state = y_run ? "idle30p" : "idle30n";
-    } else if (edge_span == -1.0f) {
-      state = y_run ? "idle30n" : "idle30p";
+    // The original uses the slope art exactly where it stored a half step
+    // anchor (the midpoint of a truly sloped edge); everything else draws
+    // flat at the stored anchor, including the fractional anchors it
+    // computes along cliff bases (verified by tracing its coping against
+    // the stored elevations on deathmtn and the fencetest save).
+    if (((object->elevation % 16) + 16) % 16 == 8) {
+      float edge_span = edge_end - edge_start;
+      if (edge_span >= 0.0f) {
+        state = y_run ? "idle30p" : "idle30n";
+      } else {
+        state = y_run ? "idle30n" : "idle30p";
+      }
     }
     if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
       SDL_Log("fence (%.2f, %.2f) %s edge %.1f -> %.1f state %s key %s",
@@ -1172,30 +1174,21 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     // object was placed, stored in its record in 16ths of a height step.
     // That is the original's own answer for slopes and cliffs — deriving
     // it from the terrain (corner claims, interpolation) drifted from the
-    // real game wherever tiles disagree about an edge. A wall face still
-    // fills downward where the ground sits more than a piece below.
-    float anchor = (float) object->elevation / 16.0f;
-    int fence_face_fill = 0;
-    if (object->category == "fences" || object->category == "tankwall") {
-      float edge_start = 0.0f;
-      float edge_end = 0.0f;
-      float edge_ground = 0.0f;
-      this->fenceEdgeHeights(object, &edge_start, &edge_end, nullptr, &edge_ground);
-      fence_face_fill = (int) SDL_ceilf(anchor - edge_ground) - 1;
-      if (fence_face_fill < 0) {
-        fence_face_fill = 0;
-      }
-    }
-    world_y -= anchor * HEIGHT_STEP;
+    // real game wherever tiles disagree about an edge. Fence pieces get
+    // no extra face fill: the original draws nothing below a piece (the
+    // art's own skirt and the terrain cliff face cover drops, verified on
+    // the fencetest terraces).
+    world_y -= (float) object->elevation / 16.0f * HEIGHT_STEP;
     float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
     float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
     if (screen_x < -200.0f || screen_x > window_rect->w + 200.0f ||
         screen_y < -200.0f || screen_y > window_rect->h + 200.0f) {
       continue;
     }
-    if (SDL_getenv("OPENZTC_DEBUG_ANCHOR") != nullptr && object->category == "objects") {
-      SDL_Log("anchor %s/%s (%.2f, %.2f) h %.2f screen (%.1f, %.1f)", object->subcategory.c_str(),
-              object->code.c_str(), tile_x, tile_y, this->heightAt(tile_x, tile_y), screen_x, screen_y);
+    if (SDL_getenv("OPENZTC_DEBUG_ANCHOR") != nullptr) {
+      SDL_Log("anchor %s/%s (%.2f, %.2f) elev %d screen (%.1f, %.1f)",
+              object->category.c_str(), object->code.c_str(), tile_x, tile_y,
+              object->elevation, screen_x, screen_y);
     }
     std::string draw_key;
     Animation * animation = this->objectAnimation(object, draw_key);
@@ -1249,18 +1242,6 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
       (float) SDL_lroundf(sprite_width * this->zoom),
       (float) SDL_lroundf(sprite_height * this->zoom),
     };
-    // Extra copies of a fence piece below itself fill its wall face down
-    // to the ground across cliff drops, lowest first so each higher cap
-    // overdraws the one beneath
-    for (int fill = fence_face_fill; fill >= 1; fill--) {
-      SDL_FRect below = destination;
-      below.y += (float) fill * HEIGHT_STEP * this->zoom;
-      if (!draw_key.empty()) {
-        animation->drawByKey(renderer, &below, draw_key, mirrored);
-      } else {
-        animation->draw(renderer, &below);
-      }
-    }
     if (!draw_key.empty()) {
       animation->drawByKey(renderer, &destination, draw_key, mirrored);
     } else {
