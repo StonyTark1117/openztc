@@ -263,29 +263,90 @@ void MapView::setOrientation(int orientation) {
   }
 }
 
-// The corner height grid is the average of the heights of the tiles
-// touching each corner, which gives the terrain its slopes. The per tile
-// shape bitfield will refine this once its bit layout is confirmed.
+// Exact corner heights from the terrain shape byte: four 2 bit fields hold
+// each corner's height above a base level (bits 1:0 NW at the tile's x,y,
+// 3:2 SW, 5:4 SE, 7:6 NE), and the stored tile height is the NW corner's
+// height, so base = height - NW delta. Decoded by raising known plateaus
+// in the original and diffing the saves. Adjacent tiles disagree about a
+// shared corner exactly where the original shows a cliff face.
 void MapView::buildCornerHeights() {
   uint32_t width = this->zoo->getWidth();
   uint32_t height = this->zoo->getHeight();
   this->corner_heights.assign((size_t) (width + 1) * (height + 1), 0.0f);
-  for (uint32_t corner_y = 0; corner_y <= height; corner_y++) {
-    for (uint32_t corner_x = 0; corner_x <= width; corner_x++) {
-      float total = 0.0f;
-      int count = 0;
-      for (int dy = -1; dy <= 0; dy++) {
-        for (int dx = -1; dx <= 0; dx++) {
-          int tile_x = (int) corner_x + dx;
-          int tile_y = (int) corner_y + dy;
-          if (tile_x < 0 || tile_y < 0 || tile_x >= (int) width || tile_y >= (int) height) {
-            continue;
-          }
-          total += (float) this->zoo->getTile(tile_x, tile_y).height;
-          count++;
-        }
-      }
-      this->corner_heights[(size_t) corner_y * (width + 1) + corner_x] = count > 0 ? total / (float) count : 0.0f;
+  this->tile_corner_heights.assign((size_t) width * height * 4, 0.0f);
+  for (uint32_t tile_y = 0; tile_y < height; tile_y++) {
+    for (uint32_t tile_x = 0; tile_x < width; tile_x++) {
+      const ZooTerrainTile &tile = this->zoo->getTile(tile_x, tile_y);
+      float base = (float) tile.height - (float) (tile.shape & 3);
+      float nw = (float) tile.height;
+      float sw = base + (float) ((tile.shape >> 2) & 3);
+      float se = base + (float) ((tile.shape >> 4) & 3);
+      float ne = base + (float) ((tile.shape >> 6) & 3);
+      size_t index = ((size_t) tile_y * width + tile_x) * 4;
+      this->tile_corner_heights[index] = nw;
+      this->tile_corner_heights[index + 1] = ne;
+      this->tile_corner_heights[index + 2] = se;
+      this->tile_corner_heights[index + 3] = sw;
+      // The shared grid keeps one claim per corner for anchoring and
+      // shading; each tile writes all four so the last row and column of
+      // corners get values too
+      this->corner_heights[(size_t) tile_y * (width + 1) + tile_x] = nw;
+      this->corner_heights[(size_t) tile_y * (width + 1) + tile_x + 1] = ne;
+      this->corner_heights[(size_t) (tile_y + 1) * (width + 1) + tile_x] = sw;
+      this->corner_heights[(size_t) (tile_y + 1) * (width + 1) + tile_x + 1] = se;
+    }
+  }
+}
+
+// Corner heights of one tile in the same order the tile quads use:
+// 0 NW (x, y), 1 NE, 2 SE, 3 SW
+float MapView::tileCornerHeight(uint32_t x, uint32_t y, int corner) {
+  return this->tile_corner_heights[((size_t) y * this->zoo->getWidth() + x) * 4 + corner];
+}
+
+// The terrain height at a fractional tile position, interpolated across
+// the tile's corners, for anchoring sprites on slopes
+float MapView::heightAt(float tile_x, float tile_y) {
+  uint32_t x = (uint32_t) tile_x;
+  uint32_t y = (uint32_t) tile_y;
+  if (x >= this->zoo->getWidth() || y >= this->zoo->getHeight()) {
+    return 0.0f;
+  }
+  float fx = tile_x - (float) x;
+  float fy = tile_y - (float) y;
+  size_t index = ((size_t) y * this->zoo->getWidth() + x) * 4;
+  float nw = this->tile_corner_heights[index];
+  float ne = this->tile_corner_heights[index + 1];
+  float se = this->tile_corner_heights[index + 2];
+  float sw = this->tile_corner_heights[index + 3];
+  float north = nw + (ne - nw) * fx;
+  float south = sw + (se - sw) * fx;
+  return north + (south - north) * fy;
+}
+
+// The terrain heights at the two grid corners a fence piece's edge spans.
+// Pieces at a half tile x sit on a y axis edge and the other way around;
+// start is the corner with the smaller coordinate along the run.
+void MapView::fenceEdgeHeights(const ZooObject * object, float * start, float * end) {
+  *start = 0.0f;
+  *end = 0.0f;
+  float fraction_x = (float) (object->x % 64) / 64.0f;
+  bool y_run = fraction_x <= 0.25f || fraction_x >= 0.75f;
+  uint32_t edge_x;
+  uint32_t edge_y;
+  if (y_run) {
+    edge_x = (uint32_t) (((float) object->x / 64.0f) + 0.5f);
+    edge_y = object->y / 64;
+    if (edge_x <= this->zoo->getWidth() && edge_y + 1 <= this->zoo->getHeight()) {
+      *start = this->cornerHeight(edge_x, edge_y);
+      *end = this->cornerHeight(edge_x, edge_y + 1);
+    }
+  } else {
+    edge_x = object->x / 64;
+    edge_y = (uint32_t) (((float) object->y / 64.0f) + 0.5f);
+    if (edge_x + 1 <= this->zoo->getWidth() && edge_y <= this->zoo->getHeight()) {
+      *start = this->cornerHeight(edge_x, edge_y);
+      *end = this->cornerHeight(edge_x + 1, edge_y);
     }
   }
 }
@@ -387,6 +448,8 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   std::unordered_map<int, std::vector<int>> batch_indices;
   std::map<int, std::vector<SDL_Vertex>> blend_batches;
   std::map<int, std::vector<int>> blend_indices;
+  std::unordered_map<int, std::vector<SDL_Vertex>> cliff_batches;
+  std::unordered_map<int, std::vector<int>> cliff_indices;
 
   // The tile type at a position, or -1 off the map
   auto typeAt = [&](int x, int y) -> int {
@@ -413,7 +476,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       for (int i = 0; i < 4; i++) {
         uint32_t cx = tile_x + corner_offsets[i][0];
         uint32_t cy = tile_y + corner_offsets[i][1];
-        corner_h[i] = this->cornerHeight(cx, cy);
+        corner_h[i] = this->tileCornerHeight(tile_x, tile_y, i);
         float world_x;
         float world_y;
         this->tileToWorld((float) cx, (float) cy, &world_x, &world_y);
@@ -427,6 +490,66 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       }
       if (!visible) {
         continue;
+      }
+
+      // A vertical cliff face wherever the two tiles sharing an edge
+      // disagree about its corner heights. The east and south edge of
+      // every tile covers all edges once; the face takes the higher
+      // tile's texture. Cliff batches draw before every tile top, which
+      // covers the faces pointing away from the camera.
+      for (int edge = 0; edge < 2; edge++) {
+        // east edge: my NE(1)+SE(2) against neighbor (x+1, y) NW(0)+SW(3)
+        // south edge: my SW(3)+SE(2) against neighbor (x, y+1) NW(0)+NE(1)
+        int nx = (int) tile_x + (edge == 0 ? 1 : 0);
+        int ny = (int) tile_y + (edge == 0 ? 0 : 1);
+        if (nx >= (int) width || ny >= (int) height) {
+          continue;
+        }
+        int mine_a = edge == 0 ? 1 : 3;
+        int mine_b = 2;
+        int theirs_a = 0;
+        int theirs_b = edge == 0 ? 3 : 1;
+        float mine_h_a = corner_h[mine_a];
+        float mine_h_b = corner_h[mine_b];
+        float theirs_h_a = this->tileCornerHeight((uint32_t) nx, (uint32_t) ny, theirs_a);
+        float theirs_h_b = this->tileCornerHeight((uint32_t) nx, (uint32_t) ny, theirs_b);
+        if (mine_h_a == theirs_h_a && mine_h_b == theirs_h_b) {
+          continue;
+        }
+        bool mine_higher = mine_h_a + mine_h_b > theirs_h_a + theirs_h_b;
+        uint8_t face_type_raw = mine_higher ? tile.type : this->zoo->getTile(nx, ny).type;
+        int cliff_type = this->terrain_textures.contains(face_type_raw) ? face_type_raw : 0;
+        float high_a = mine_higher ? mine_h_a : theirs_h_a;
+        float high_b = mine_higher ? mine_h_b : theirs_h_b;
+        float low_a = mine_higher ? theirs_h_a : mine_h_a;
+        float low_b = mine_higher ? theirs_h_b : mine_h_b;
+        // The shared edge's screen position, at the high heights
+        float ax = corners[mine_a].x;
+        float bx = corners[mine_b].x;
+        float ay_high = corners[mine_a].y - (high_a - corner_h[mine_a]) * HEIGHT_STEP * this->zoom;
+        float by_high = corners[mine_b].y - (high_b - corner_h[mine_b]) * HEIGHT_STEP * this->zoom;
+        float ay_low = ay_high + (high_a - low_a) * HEIGHT_STEP * this->zoom;
+        float by_low = by_high + (high_b - low_b) * HEIGHT_STEP * this->zoom;
+        float cliff_shade = 0.6f;
+        SDL_FColor cliff_color = {cliff_shade, cliff_shade, cliff_shade, 1.0f};
+        SDL_FPoint cliff_positions[4] = {{ax, ay_high}, {bx, by_high}, {bx, by_low}, {ax, ay_low}};
+        const SDL_FPoint cliff_uv[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
+        std::vector<SDL_Vertex> &cliff_vertices = cliff_batches[cliff_type];
+        std::vector<int> &cliff_index_list = cliff_indices[cliff_type];
+        int cliff_base = (int) cliff_vertices.size();
+        for (int i = 0; i < 4; i++) {
+          SDL_Vertex vertex;
+          vertex.position = cliff_positions[i];
+          vertex.color = cliff_color;
+          vertex.tex_coord = cliff_uv[i];
+          cliff_vertices.push_back(vertex);
+        }
+        cliff_index_list.push_back(cliff_base);
+        cliff_index_list.push_back(cliff_base + 1);
+        cliff_index_list.push_back(cliff_base + 2);
+        cliff_index_list.push_back(cliff_base);
+        cliff_index_list.push_back(cliff_base + 2);
+        cliff_index_list.push_back(cliff_base + 3);
       }
 
       // Slope shading per corner, like the original's per vertex lit
@@ -542,6 +665,11 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     }
   }
 
+  for (auto &batch : cliff_batches) {
+    SDL_RenderGeometry(renderer, this->terrain_textures[batch.first], batch.second.data(),
+                       (int) batch.second.size(), cliff_indices[batch.first].data(),
+                       (int) cliff_indices[batch.first].size());
+  }
   for (auto &batch : batches) {
     SDL_Texture * texture = this->terrain_textures.contains(batch.first) ? this->terrain_textures[batch.first] : nullptr;
     SDL_RenderGeometry(renderer, texture, batch.second.data(), (int) batch.second.size(),
@@ -674,9 +802,20 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   std::string animation_path;
   if (object->category == "fences") {
     // Fence pieces sit on tile edges at half tile positions: 0 is the NE
-    // facing piece of an x axis run, 6 the SE facing piece of a y axis run
+    // facing piece of an x axis run, 6 the SE facing piece of a y axis
+    // run. On a sloped edge the piece uses its 30 degree slope art:
+    // idle30p rises along the edge's axis, idle30n falls.
     draw_key = rotationDirection(object->rotation);
-    animation_path = "fences/" + object->subcategory + "/" + object->code + "/idle/idle";
+    std::string state = "idle";
+    float edge_start = 0.0f;
+    float edge_end = 0.0f;
+    this->fenceEdgeHeights(object, &edge_start, &edge_end);
+    if (edge_end > edge_start) {
+      state = "idle30p";
+    } else if (edge_end < edge_start) {
+      state = "idle30n";
+    }
+    animation_path = "fences/" + object->subcategory + "/" + object->code + "/" + state + "/" + state;
     cache_key = animation_path;
   } else if (object->category == "paths") {
     // Piece 5 is the isolated piece, the 16 neighbor combinations follow
@@ -798,12 +937,11 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     float world_x;
     float world_y;
     this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
-    // Anchor the sprite at the terrain height of its tile
-    uint32_t corner_x = (uint32_t) tile_x;
-    uint32_t corner_y = (uint32_t) tile_y;
-    if (corner_x <= this->zoo->getWidth() && corner_y <= this->zoo->getHeight()) {
-      world_y -= this->cornerHeight(corner_x, corner_y) * HEIGHT_STEP;
-    }
+    // Anchor the sprite at the interpolated terrain height under it so
+    // objects follow slopes. For a fence piece on a sloped edge this is
+    // the edge midpoint, which is where its 30 degree art anchors
+    // (verified pixel aligned against the original on fshore.zoo).
+    world_y -= this->heightAt(tile_x, tile_y) * HEIGHT_STEP;
     float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
     float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
     if (screen_x < -200.0f || screen_x > window_rect->w + 200.0f ||
@@ -887,11 +1025,7 @@ void MapView::drawSimEntity(SDL_Renderer * renderer, float center_x, float cente
   float world_x;
   float world_y;
   this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
-  uint32_t corner_x = (uint32_t) tile_x;
-  uint32_t corner_y = (uint32_t) tile_y;
-  if (corner_x <= this->zoo->getWidth() && corner_y <= this->zoo->getHeight()) {
-    world_y -= this->cornerHeight(corner_x, corner_y) * HEIGHT_STEP;
-  }
+  world_y -= this->heightAt(tile_x, tile_y) * HEIGHT_STEP;
   float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
   float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
   std::string draw_key = entity_directions[(facing + 14 - 2 * (uint32_t) this->orientation) % 8];

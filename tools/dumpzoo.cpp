@@ -13,6 +13,10 @@ int main(int argc, char ** argv) {
   }
   bool list_objects = false;
   bool roundtrip = false;
+  int terrain_x = -1;
+  int terrain_y = -1;
+  int terrain_w = 0;
+  int terrain_h = 0;
   int failures = 0;
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "--objects") == 0) {
@@ -21,6 +25,16 @@ int main(int argc, char ** argv) {
     }
     if (strcmp(argv[i], "--roundtrip") == 0) {
       roundtrip = true;
+      continue;
+    }
+    // --terrain x y w h prints a height/shape/type grid for the following
+    // files, for reverse engineering the shape bitfield
+    if (strcmp(argv[i], "--terrain") == 0 && i + 4 < argc) {
+      terrain_x = atoi(argv[i + 1]);
+      terrain_y = atoi(argv[i + 2]);
+      terrain_w = atoi(argv[i + 3]);
+      terrain_h = atoi(argv[i + 4]);
+      i += 4;
       continue;
     }
     ZooFile * zoo = ZooFile::loadFromFile(argv[i]);
@@ -56,6 +70,16 @@ int main(int argc, char ** argv) {
              exhibit.name.c_str(), exhibit.x, exhibit.y, exhibit.entrance_x, exhibit.entrance_y,
              exhibit.entrance_rotation, exhibit.current_donations, exhibit.last_donations, exhibit.total_donations,
              exhibit.current_upkeep, exhibit.last_upkeep, exhibit.total_upkeep, exhibit.extension_type);
+    }
+    if (terrain_x >= 0) {
+      for (int ty = terrain_y; ty < terrain_y + terrain_h && ty < (int) zoo->getHeight(); ty++) {
+        printf("  y=%3d ", ty);
+        for (int tx = terrain_x; tx < terrain_x + terrain_w && tx < (int) zoo->getWidth(); tx++) {
+          const ZooTerrainTile &tile = zoo->getTile(tx, ty);
+          printf("%3d/%02x/%02x ", tile.height, tile.shape, tile.type);
+        }
+        printf("\n");
+      }
     }
     if (roundtrip) {
       FILE * fd = fopen(argv[i], "rb");
