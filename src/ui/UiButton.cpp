@@ -36,7 +36,12 @@ UiButton::UiButton(IniReader * ini_reader, ResourceManager * resource_manager, C
 }
 
 UiButton::~UiButton() {
-  SDL_DestroyTexture(text);
+  if (this->text != nullptr) {
+    SDL_DestroyTexture(this->text);
+  }
+  if (this->shadow != nullptr) {
+    SDL_DestroyTexture(this->shadow);
+  }
   for (UiElement * child : this->children) {
     delete child;
   }
@@ -103,10 +108,14 @@ void UiButton::setRadioSelected(bool radio_selected) {
 
 void UiButton::setText(const std::string &text) {
   this->text_string = text;
-  // The textures are cached by the resource manager, dropping the
-  // references is enough
-  this->text = nullptr;
-  this->shadow = nullptr;
+  if (this->text != nullptr) {
+    SDL_DestroyTexture(this->text);
+    this->text = nullptr;
+  }
+  if (this->shadow != nullptr) {
+    SDL_DestroyTexture(this->shadow);
+    this->shadow = nullptr;
+  }
 }
 
 void UiButton::draw(SDL_Renderer * renderer, SDL_FRect * layout_rect) {

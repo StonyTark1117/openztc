@@ -123,7 +123,12 @@ void UiText::drawWrapped(SDL_Renderer * renderer, SDL_FRect * layout_rect) {
 }
 
 UiText::~UiText() {
-  SDL_DestroyTexture(text);
+  if (this->text != nullptr) {
+    SDL_DestroyTexture(this->text);
+  }
+  if (this->shadow != nullptr) {
+    SDL_DestroyTexture(this->shadow);
+  }
   for (UiElement * child : this->children) {
     delete child;
   }
