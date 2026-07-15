@@ -242,17 +242,95 @@ std::vector<uint64_t> MapView::getPathTileKeys() {
   return keys;
 }
 
-// Paint order: back to front by screen depth
+// Paint order: back to front by screen depth rows of whole tiles. A fence
+// piece separates its two flanking tiles, so it draws after everything in
+// the tile behind it and before everything in the tile in front — a
+// continuous depth sort by anchor cannot express that and lets scenery in
+// the front tile slip behind the fence.
 void MapView::sortObjects() {
+  struct SortKey {
+    int row;
+    int phase;
+    float depth;
+  };
+  std::unordered_map<const ZooObject *, SortKey> keys;
+  keys.reserve(this->sorted_objects.size());
+  for (const ZooObject * object : this->sorted_objects) {
+    float tile_x = (float) object->x / 64.0f;
+    float tile_y = (float) object->y / 64.0f;
+    float world_x;
+    float depth;
+    this->tileToWorld(tile_x, tile_y, &world_x, &depth);
+    SortKey key;
+    key.depth = depth;
+    if (object->category == "fences" || object->category == "tankwall") {
+      // The two flanking tile centers; the piece draws right after the
+      // one further back
+      float fraction_x = (float) (object->x % 64) / 64.0f;
+      bool y_run = fraction_x <= 0.25f || fraction_x >= 0.75f;
+      float ax;
+      float ay;
+      float bx;
+      float by;
+      if (y_run) {
+        float edge_x = (float) (int) (tile_x + 0.5f);
+        ax = edge_x - 0.5f;
+        ay = (float) (int) tile_y + 0.5f;
+        bx = edge_x + 0.5f;
+        by = ay;
+      } else {
+        float edge_y = (float) (int) (tile_y + 0.5f);
+        ax = (float) (int) tile_x + 0.5f;
+        ay = edge_y - 0.5f;
+        bx = ax;
+        by = edge_y + 0.5f;
+      }
+      float depth_a;
+      float depth_b;
+      this->tileToWorld(ax, ay, &world_x, &depth_a);
+      this->tileToWorld(bx, by, &world_x, &depth_b);
+      key.row = (int) SDL_lroundf(SDL_min(depth_a, depth_b) / TILE_HALF_HEIGHT);
+      // Before the row's objects: the original lets scenery in the same
+      // row overhang a fence (a tree crown droops over the wall in front
+      // of it), while anything in the fence's front tile is a row later
+      // and covers it either way
+      key.phase = 0;
+    } else {
+      // The object's whole tile decides its row
+      float center_x = (float) (int) tile_x + 0.5f;
+      float center_y = (float) (int) tile_y + 0.5f;
+      float center_depth;
+      this->tileToWorld(center_x, center_y, &world_x, &center_depth);
+      key.row = (int) SDL_lroundf(center_depth / TILE_HALF_HEIGHT);
+      key.phase = 1;
+    }
+    keys[object] = key;
+  }
   std::sort(this->sorted_objects.begin(), this->sorted_objects.end(),
-            [this](const ZooObject * a, const ZooObject * b) {
-              float world_x;
-              float depth_a;
-              float depth_b;
-              this->tileToWorld((float) a->x / 64.0f, (float) a->y / 64.0f, &world_x, &depth_a);
-              this->tileToWorld((float) b->x / 64.0f, (float) b->y / 64.0f, &world_x, &depth_b);
-              return depth_a < depth_b;
+            [&keys](const ZooObject * a, const ZooObject * b) {
+              const SortKey &ka = keys[a];
+              const SortKey &kb = keys[b];
+              if (ka.row != kb.row) {
+                return ka.row < kb.row;
+              }
+              if (ka.phase != kb.phase) {
+                return ka.phase < kb.phase;
+              }
+              return ka.depth < kb.depth;
             });
+  if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
+    int index = 0;
+    for (const ZooObject * object : this->sorted_objects) {
+      const SortKey &key = keys[object];
+      float tx = (float) object->x / 64.0f;
+      float ty = (float) object->y / 64.0f;
+      if (tx >= 12.0f && tx <= 19.0f && ty >= 43.0f && ty <= 47.0f) {
+        SDL_Log("sort %4d row %3d phase %d depth %7.1f %s/%s (%.2f, %.2f)", index, key.row,
+                key.phase, key.depth, object->category.c_str(), object->code.c_str(), tx, ty);
+      }
+      index++;
+    }
+  }
 }
 
 void MapView::setOrientation(int orientation) {
@@ -360,28 +438,66 @@ Animation * MapView::firstAnimation(const std::vector<std::string> &candidates, 
 
 // The terrain heights at the two grid corners a fence piece's edge spans.
 // Pieces at a half tile x sit on a y axis edge and the other way around;
-// start is the corner with the smaller coordinate along the run.
-void MapView::fenceEdgeHeights(const ZooObject * object, float * start, float * end) {
+// start is the corner with the smaller coordinate along the run. The two
+// tiles flanking the edge can disagree about the corner heights where the
+// terrain has a cliff along the fence line — the original crowns the
+// fence on the higher side, so each corner takes the higher claim.
+void MapView::fenceEdgeHeights(const ZooObject * object, float * start, float * end, bool * y_run_out,
+                               float * ground) {
   *start = 0.0f;
   *end = 0.0f;
+  uint32_t width = this->zoo->getWidth();
+  uint32_t height = this->zoo->getHeight();
+  // The highest (or lowest) claim any of the four tiles meeting at a grid
+  // corner makes for that corner. Corner indices: 0 NW, 1 NE, 2 SE, 3 SW.
+  auto cornerClaim = [&](int cx, int cy, bool highest) -> float {
+    const int around[4][3] = {
+      {-1, -1, 2},  // the tile north west of the corner claims it as SE
+      {0, -1, 3},   // north east tile, SW
+      {-1, 0, 1},   // south west tile, NE
+      {0, 0, 0},    // south east tile, NW
+    };
+    float best = 0.0f;
+    bool found = false;
+    for (int i = 0; i < 4; i++) {
+      int tile_x = cx + around[i][0];
+      int tile_y = cy + around[i][1];
+      if (tile_x < 0 || tile_y < 0 || tile_x >= (int) width || tile_y >= (int) height) {
+        continue;
+      }
+      float h = this->tileCornerHeight((uint32_t) tile_x, (uint32_t) tile_y, around[i][2]);
+      if (!found || (highest ? h > best : h < best)) {
+        best = h;
+        found = true;
+      }
+    }
+    return best;
+  };
   float fraction_x = (float) (object->x % 64) / 64.0f;
   bool y_run = fraction_x <= 0.25f || fraction_x >= 0.75f;
-  uint32_t edge_x;
-  uint32_t edge_y;
+  if (y_run_out != nullptr) {
+    *y_run_out = y_run;
+  }
+  int corner_ax;
+  int corner_ay;
+  int corner_bx;
+  int corner_by;
   if (y_run) {
-    edge_x = (uint32_t) (((float) object->x / 64.0f) + 0.5f);
-    edge_y = object->y / 64;
-    if (edge_x <= this->zoo->getWidth() && edge_y + 1 <= this->zoo->getHeight()) {
-      *start = this->cornerHeight(edge_x, edge_y);
-      *end = this->cornerHeight(edge_x, edge_y + 1);
-    }
+    corner_ax = (int) (((float) object->x / 64.0f) + 0.5f);
+    corner_ay = (int) (object->y / 64);
+    corner_bx = corner_ax;
+    corner_by = corner_ay + 1;
   } else {
-    edge_x = object->x / 64;
-    edge_y = (uint32_t) (((float) object->y / 64.0f) + 0.5f);
-    if (edge_x + 1 <= this->zoo->getWidth() && edge_y <= this->zoo->getHeight()) {
-      *start = this->cornerHeight(edge_x, edge_y);
-      *end = this->cornerHeight(edge_x + 1, edge_y);
-    }
+    corner_ax = (int) (object->x / 64);
+    corner_ay = (int) (((float) object->y / 64.0f) + 0.5f);
+    corner_bx = corner_ax + 1;
+    corner_by = corner_ay;
+  }
+  *start = cornerClaim(corner_ax, corner_ay, true);
+  *end = cornerClaim(corner_bx, corner_by, true);
+  if (ground != nullptr) {
+    *ground = SDL_min(cornerClaim(corner_ax, corner_ay, false),
+                      cornerClaim(corner_bx, corner_by, false));
   }
 }
 
@@ -840,17 +956,30 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   if (object->category == "fences") {
     // Fence pieces sit on tile edges at half tile positions: 0 is the NE
     // facing piece of an x axis run, 6 the SE facing piece of a y axis
-    // run. On a sloped edge the piece uses its 30 degree slope art:
-    // idle30p rises along the edge's axis, idle30n falls.
+    // run. On a sloped edge the piece uses its 30 degree slope art. The
+    // art's positive direction runs with +y on y runs but against +x on
+    // x runs (verified against the original on fshore's y run wall and
+    // deathmtn's x run wall).
     draw_key = rotationDirection(object->rotation);
     std::string state = "idle";
     float edge_start = 0.0f;
     float edge_end = 0.0f;
-    this->fenceEdgeHeights(object, &edge_start, &edge_end);
-    if (edge_end > edge_start) {
-      state = "idle30p";
-    } else if (edge_end < edge_start) {
-      state = "idle30n";
+    bool y_run = false;
+    this->fenceEdgeHeights(object, &edge_start, &edge_end, &y_run);
+    // The 30 degree art spans one height step; edges dropping further
+    // still use it, crowning the top step so the coping line stays one
+    // continuous diagonal, with the wall face stacked downward when
+    // drawn, like the original's terrace walls
+    float edge_span = edge_end - edge_start;
+    if (edge_span >= 1.0f) {
+      state = y_run ? "idle30p" : "idle30n";
+    } else if (edge_span <= -1.0f) {
+      state = y_run ? "idle30n" : "idle30p";
+    }
+    if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
+      SDL_Log("fence (%.2f, %.2f) %s edge %.1f -> %.1f state %s key %s",
+              (float) object->x / 64.0f, (float) object->y / 64.0f, y_run ? "y-run" : "x-run",
+              edge_start, edge_end, state.c_str(), draw_key.c_str());
     }
     animation_path = "fences/" + object->subcategory + "/" + object->code + "/" + state + "/" + state;
     cache_key = animation_path;
@@ -1012,10 +1141,31 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     float world_y;
     this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
     // Anchor the sprite at the interpolated terrain height under it so
-    // objects follow slopes. For a fence piece on a sloped edge this is
-    // the edge midpoint, which is where its 30 degree art anchors
-    // (verified pixel aligned against the original on fshore.zoo).
-    world_y -= this->heightAt(tile_x, tile_y) * HEIGHT_STEP;
+    // objects follow slopes. A fence piece anchors at its edge's midpoint
+    // (verified pixel aligned against the original on fshore.zoo); where
+    // the edge drops more than the one step its slope art can span it
+    // anchors as if the edge were the top step alone, and the face fills
+    // down to the ground when drawn.
+    int fence_face_fill = 0;
+    if (object->category == "fences" || object->category == "tankwall") {
+      float edge_start = 0.0f;
+      float edge_end = 0.0f;
+      float edge_ground = 0.0f;
+      this->fenceEdgeHeights(object, &edge_start, &edge_end, nullptr, &edge_ground);
+      float anchor;
+      if (SDL_fabsf(edge_end - edge_start) >= 2.0f) {
+        anchor = SDL_max(edge_start, edge_end) - 0.5f;
+      } else {
+        anchor = (edge_start + edge_end) * 0.5f;
+      }
+      fence_face_fill = (int) SDL_ceilf(anchor - edge_ground) - 1;
+      if (fence_face_fill < 0) {
+        fence_face_fill = 0;
+      }
+      world_y -= anchor * HEIGHT_STEP;
+    } else {
+      world_y -= this->heightAt(tile_x, tile_y) * HEIGHT_STEP;
+    }
     float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
     float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
     if (screen_x < -200.0f || screen_x > window_rect->w + 200.0f ||
@@ -1063,14 +1213,29 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
       box_x0 = -sprite_width / 2.0f;
       box_y0 = -sprite_height;
     }
-    // Mirroring flips the box around the anchor point too
+    // Mirroring flips the box around the anchor point too. The corners
+    // snap to whole pixels like the original's software blitter; on a
+    // fractional position the linear texture filter would smear the
+    // sprite edges, drawing a seam at every fence piece boundary.
     float destination_x0 = mirrored ? -(box_x0 + sprite_width) : box_x0;
     SDL_FRect destination = {
-      screen_x + destination_x0 * this->zoom,
-      screen_y + box_y0 * this->zoom,
-      sprite_width * this->zoom,
-      sprite_height * this->zoom,
+      (float) SDL_lroundf(screen_x + destination_x0 * this->zoom),
+      (float) SDL_lroundf(screen_y + box_y0 * this->zoom),
+      (float) SDL_lroundf(sprite_width * this->zoom),
+      (float) SDL_lroundf(sprite_height * this->zoom),
     };
+    // Extra copies of a fence piece below itself fill its wall face down
+    // to the ground across cliff drops, lowest first so each higher cap
+    // overdraws the one beneath
+    for (int fill = fence_face_fill; fill >= 1; fill--) {
+      SDL_FRect below = destination;
+      below.y += (float) fill * HEIGHT_STEP * this->zoom;
+      if (!draw_key.empty()) {
+        animation->drawByKey(renderer, &below, draw_key, mirrored);
+      } else {
+        animation->draw(renderer, &below);
+      }
+    }
     if (!draw_key.empty()) {
       animation->drawByKey(renderer, &destination, draw_key, mirrored);
     } else {

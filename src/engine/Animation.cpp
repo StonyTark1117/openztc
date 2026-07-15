@@ -90,7 +90,11 @@ void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const 
     }
     this->textures[key] = std::vector<SDL_Texture *>();
     for (SDL_Surface * surface : this->surfaces[key]) {
-      this->textures[key].push_back(SDL_CreateTextureFromSurface(renderer, surface));
+      SDL_Texture * texture = SDL_CreateTextureFromSurface(renderer, surface);
+      // Point sampling like the original's blitter; linear would bleed the
+      // transparent edge into each sprite, seaming tiled pieces like fences
+      SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+      this->textures[key].push_back(texture);
       SDL_DestroySurface(surface);
     }
     this->surfaces[key].clear();
@@ -131,9 +135,9 @@ void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDire
     }
     this->textures[direction_string] = std::vector<SDL_Texture *>();
     for (SDL_Surface * surface: this->surfaces[direction_string]) {
-      this->textures[direction_string].push_back(
-        SDL_CreateTextureFromSurface(renderer, surface)
-      );
+      SDL_Texture * texture = SDL_CreateTextureFromSurface(renderer, surface);
+      SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+      this->textures[direction_string].push_back(texture);
       SDL_DestroySurface(surface);
     }
     this->surfaces[direction_string].clear();

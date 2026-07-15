@@ -95,7 +95,8 @@ private:
   float cornerHeight(uint32_t x, uint32_t y);
   float tileCornerHeight(uint32_t x, uint32_t y, int corner);
   float heightAt(float tile_x, float tile_y);
-  void fenceEdgeHeights(const ZooObject * object, float * start, float * end);
+  void fenceEdgeHeights(const ZooObject * object, float * start, float * end, bool * y_run=nullptr,
+                        float * ground=nullptr);
   void tileToWorld(float tile_x, float tile_y, float * world_x, float * world_y);
   std::string rotationDirection(uint32_t rotation);
   void sortObjects();
