@@ -8,13 +8,14 @@ FontManager::FontManager() {
 
 }
 
+// The ttf library belongs to the Window, which initialized it: the font
+// manager is rebuilt on a mod reload and must leave the library running
 FontManager::~FontManager() {
   for (auto font_entry : this->fonts) {
     if (font_entry.second != nullptr) {
       TTF_CloseFont(font_entry.second);
     }
   }
-  TTF_Quit();
 }
 
 SDL_Texture * FontManager::getStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color) {

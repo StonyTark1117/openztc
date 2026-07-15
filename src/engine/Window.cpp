@@ -73,6 +73,7 @@ void Window::present() {
 Window::~Window() {
     SDL_DestroyRenderer(this->renderer);
     SDL_DestroyWindow(this->window);
+    TTF_Quit();
     MIX_Quit();
     SDL_Quit();
 }
