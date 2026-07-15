@@ -19,9 +19,10 @@ public:
   // Fixed number of simulation ticks per second. The renderer runs
   // independently of this.
   static const int TICKS_PER_SECOND = 20;
-  // Game time: how many ticks make one game month.
-  // TODO: calibrate against the original's clock speed
-  static const int TICKS_PER_MONTH = 1200;
+  // Game time: one month is five real minutes in the original, so a year
+  // is one hour. Measured against the original under Wine and documented
+  // by the community wiki.
+  static const int TICKS_PER_MONTH = 300 * TICKS_PER_SECOND;
 
   Simulation(uint32_t seed = 0, int64_t starting_cash = 0);
 

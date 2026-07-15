@@ -85,6 +85,13 @@ SDL_Surface * ZtdFile::getImageSurfaceTga(const std::string &ztd_file, const std
       // them, like the Marine Mania scenario background, have an alpha
       // channel which is zero everywhere and would be invisible if blended.
       SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
+      // In tga files without an alpha channel magenta is the transparent
+      // color, like around the panel of the update screen
+      const SDL_PixelFormatDetails * format = SDL_GetPixelFormatDetails(surface->format);
+      if (format != nullptr && format->Amask == 0) {
+        SDL_SetSurfaceColorKey(surface, true, SDL_MapRGB(format, nullptr, 255, 0, 255));
+        SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
+      }
     }
     free(file_content);
   } else {

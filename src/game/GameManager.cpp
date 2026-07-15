@@ -111,8 +111,8 @@ void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     // The in game toolbar draws over the map. Only its date and money
     // displays are wired up so far.
     this->updateGameHud();
-    if (this->layouts.contains("Main")) {
-      this->layouts["Main"]->draw(renderer, window_rect);
+    if (this->layouts.contains("main")) {
+      this->layouts["main"]->draw(renderer, window_rect);
     }
     return;
   }
@@ -553,10 +553,10 @@ std::string GameManager::formatMoney(int64_t amount) {
 }
 
 void GameManager::updateGameHud() {
-  if (this->simulation == nullptr || !this->layouts.contains("Main")) {
+  if (this->simulation == nullptr || !this->layouts.contains("main")) {
     return;
   }
-  UiLayout * layout = this->layouts["Main"];
+  UiLayout * layout = this->layouts["main"];
   int month = this->simulation->getMonth();
   int year = this->simulation->getYear();
   if (month != this->shown_month || year != this->shown_year) {
@@ -587,8 +587,9 @@ void GameManager::updateGameHud() {
 // repurposed: the file list shows the mods with their enabled state and
 // the buttons toggle and reorder them. Changes save immediately and apply
 // on the next launch.
-#define MOD_LAYOUT_NAME "Update"
+#define MOD_LAYOUT_NAME "update"
 #define MOD_TITLE_ID 2101
+#define MOD_INFO_LABEL_ID 2102
 #define MOD_INFO_LIST_ID 2103
 #define MOD_LIST_LABEL_ID 2105
 #define MOD_LIST_ID 2106
@@ -610,6 +611,10 @@ void GameManager::setupModScreen() {
   UiText * list_label = dynamic_cast<UiText*>(layout->getChildWithId(MOD_LIST_LABEL_ID));
   if (list_label != nullptr) {
     list_label->setText("Installed Mods");
+  }
+  UiText * info_label = dynamic_cast<UiText*>(layout->getChildWithId(MOD_INFO_LABEL_ID));
+  if (info_label != nullptr) {
+    info_label->setText("Information");
   }
   UiButton * done_button = dynamic_cast<UiButton*>(layout->getChildWithId(MOD_DONE_BUTTON_ID));
   if (done_button != nullptr) {
