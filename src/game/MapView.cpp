@@ -1005,8 +1005,12 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     // Piece 5 is the isolated piece, the 16 neighbor combinations follow
     // it. The mask bits are in screen directions, so each neighbor's bit
     // depends on where the map orientation puts it on screen. The bit per
-    // screen direction in the SE, SW, NW, NE ring:
-    static const int screen_direction_bit[4] = {2, 4, 8, 1};
+    // screen direction in the SE, SW, NW, NE ring, read off the border
+    // sides of the piece art itself (straight runs are invariant under
+    // swapping SW and NE, which is why the old {2,4,8,1} table survived
+    // every straight-path comparison and only corner and junction pieces
+    // drew a border facing their neighbor):
+    static const int screen_direction_bit[4] = {2, 1, 8, 4};
     uint32_t tile_x = object->x / 64;
     uint32_t tile_y = object->y / 64;
     // Sloped tiles use the four ramp pieces 1 to 4 instead of the mask
@@ -1047,6 +1051,9 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
         mask |= screen_direction_bit[(2 + 4 - this->orientation) % 4];
       }
       draw_key = std::to_string(5 + mask);
+    }
+    if (SDL_getenv("OPENZTC_DEBUG_PATH") != nullptr) {
+      SDL_Log("path %s (%u, %u) piece %s", object->code.c_str(), tile_x, tile_y, draw_key.c_str());
     }
     animation_path = "paths/" + object->code + "/idle/idle";
     cache_key = animation_path;
