@@ -688,6 +688,16 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
         // centers, and the linear filter was washing out the ground
         // grain (measured: half the original's local contrast on sand)
         SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+        // The original holds its terrain art at 128 texels to the tile:
+        // every ground type ships at 128x128 and covers one tile, while
+        // water and concrete ship at 256x256 and stretch over two tiles
+        // each way. Squeezing those onto a single tile made their grain
+        // twice as fine as the original's.
+        float texture_width = 0.0f;
+        float texture_height = 0.0f;
+        SDL_GetTextureSize(texture, &texture_width, &texture_height);
+        int span = (int) SDL_lroundf(texture_width / 128.0f);
+        this->terrain_texture_span[type] = SDL_max(span, 1);
         this->terrain_textures[type] = texture;
       }
     }
@@ -903,13 +913,38 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       }
       float brightness = (corner_bright[0] + corner_bright[1] + corner_bright[2] + corner_bright[3]) / 4.0f;
 
-      // Mirror the texture stamp per tile by a position hash so large
-      // same type fields do not show a repeating grid
-      uint32_t stamp = (tile_x * 73856093u) ^ (tile_y * 19349663u);
-      float u0 = (stamp & 1) ? 1.0f : 0.0f;
-      float v0 = (stamp & 2) ? 1.0f : 0.0f;
-      const SDL_FPoint texture_coordinates[4] = {
-        {u0, v0}, {1.0f - u0, v0}, {1.0f - u0, 1.0f - v0}, {u0, 1.0f - v0}};
+      // A type's art may span more than one tile, so the corners have to
+      // be placed per type: an overlay splatting onto this tile carries
+      // its own span. Within a span the tile takes its own window of the
+      // texture, which keeps the art continuous across the block.
+      auto textureCorners = [&](int for_type, SDL_FPoint * out) {
+        auto found = this->terrain_texture_span.find(for_type);
+        int span = found != this->terrain_texture_span.end() ? found->second : 1;
+        if (span <= 1) {
+          // Mirror the texture stamp per tile by a position hash so large
+          // same type fields do not show a repeating grid
+          uint32_t stamp = (tile_x * 73856093u) ^ (tile_y * 19349663u);
+          float u0 = (stamp & 1) ? 1.0f : 0.0f;
+          float v0 = (stamp & 2) ? 1.0f : 0.0f;
+          out[0] = {u0, v0};
+          out[1] = {1.0f - u0, v0};
+          out[2] = {1.0f - u0, 1.0f - v0};
+          out[3] = {u0, 1.0f - v0};
+          return;
+        }
+        // Mirroring would break the seam between the tiles of a block, so
+        // a spanning texture just runs on across them
+        float window = 1.0f / (float) span;
+        float u0 = (float) ((int) tile_x % span) * window;
+        float v0 = (float) ((int) tile_y % span) * window;
+        out[0] = {u0, v0};
+        out[1] = {u0 + window, v0};
+        out[2] = {u0 + window, v0 + window};
+        out[3] = {u0, v0 + window};
+      };
+      SDL_FPoint texture_coordinates[4];
+      textureCorners(this->terrain_textures.contains(tile.type) ? (int) tile.type : 0,
+                     texture_coordinates);
 
       int type = this->terrain_textures.contains(tile.type) ? tile.type : 0;
       std::vector<SDL_Vertex> &vertices = batches[type];
@@ -975,6 +1010,10 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
           corner_alpha[i] = cornerTouchesType(cx, cy, overlay_type) ? 1.0f : 0.0f;
           alpha_sum += corner_alpha[i];
         }
+        // The overlay carries its own art, so it wants its own corners:
+        // water spans two tiles where the ground under it spans one
+        SDL_FPoint overlay_coordinates[4];
+        textureCorners(overlay_type, overlay_coordinates);
         std::vector<SDL_Vertex> &blend_vertices = blend_batches[overlay_type];
         std::vector<int> &blend_index_list = blend_indices[overlay_type];
         int blend_base = (int) blend_vertices.size();
@@ -982,7 +1021,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
           SDL_Vertex vertex;
           vertex.position = corners[i];
           vertex.color = {corner_bright[i], corner_bright[i], corner_bright[i], corner_alpha[i]};
-          vertex.tex_coord = texture_coordinates[i];
+          vertex.tex_coord = overlay_coordinates[i];
           blend_vertices.push_back(vertex);
         }
         // A center vertex keeps the interpolation symmetric across the
@@ -990,7 +1029,10 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         SDL_Vertex center_vertex;
         center_vertex.position = tile_center;
         center_vertex.color = {brightness, brightness, brightness, alpha_sum / 4.0f};
-        center_vertex.tex_coord = {0.5f, 0.5f};
+        center_vertex.tex_coord = {
+          (overlay_coordinates[0].x + overlay_coordinates[2].x) / 2.0f,
+          (overlay_coordinates[0].y + overlay_coordinates[2].y) / 2.0f,
+        };
         blend_vertices.push_back(center_vertex);
         for (int i = 0; i < 4; i++) {
           blend_index_list.push_back(blend_base + i);

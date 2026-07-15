@@ -75,6 +75,10 @@ private:
   // Terrain types the tiletex configs mark blend=0: concrete and asphalt
   // keep a hard edge against their neighbors instead of splatting
   std::unordered_set<int> unblended_terrain_types;
+  // How many tiles across a type's texture spans. The original holds its
+  // ground art at 128 texels to the tile, so the 256 texel water and
+  // concrete cover two tiles each way rather than one.
+  std::unordered_map<int, int> terrain_texture_span;
   bool textures_loaded = false;
 
   // Objects sorted in paint order and their animations by object code
