@@ -44,7 +44,13 @@ int main(int argc, char ** argv) {
     for (auto entry : type_counts) {
       printf("%02x:%d ", entry.first, entry.second);
     }
-    printf("\n");
+    printf("  entrance=%d,%d exhibits=%u\n", zoo->getEntranceX(), zoo->getEntranceY(), (uint32_t) zoo->getExhibits().size());
+    for (const ZooExhibit &exhibit : zoo->getExhibits()) {
+      printf("  exhibit \"%s\" at %d,%d entrance %d,%d rot %d donations %.2f/%.2f/%.2f upkeep %.2f/%.2f/%.2f ext %x\n",
+             exhibit.name.c_str(), exhibit.x, exhibit.y, exhibit.entrance_x, exhibit.entrance_y,
+             exhibit.entrance_rotation, exhibit.current_donations, exhibit.last_donations, exhibit.total_donations,
+             exhibit.current_upkeep, exhibit.last_upkeep, exhibit.total_upkeep, exhibit.extension_type);
+    }
     if (list_objects) {
       for (const ZooObject &object : zoo->getObjects()) {
         printf("  %s/%s/%s x=%u (%.2f) y=%u (%.2f) rotation=%u\n",

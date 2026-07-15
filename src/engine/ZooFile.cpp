@@ -52,6 +52,92 @@ static bool isValidObjectAnchor(const uint8_t * data, size_t size, size_t positi
   return isAsciiString(data, size, after_category, after_subcategory);
 }
 
+static float readFloat(const uint8_t * data, size_t position) {
+  float value;
+  memcpy(&value, data + position, 4);
+  return value;
+}
+
+// The exhibit list follows the entrance position in the header: a count,
+// then per exhibit the southern corner, a length-prefixed name, the
+// entrance tile and rotation, six running money numbers, 30 undocumented
+// bytes and an extension type with extra data for tanks. Returns the
+// position after the list, or 0 when the data does not look like exhibits,
+// in which case the caller falls back to sliding the terrain start.
+size_t ZooFile::parseExhibits(const uint8_t * data, size_t size, size_t position, char variant, std::vector<ZooExhibit> &exhibits) {
+  if (position + 4 > size) {
+    return 0;
+  }
+  uint32_t count = readUint32(data, position);
+  position += 4;
+  if (count > 1000) {
+    return 0;
+  }
+  for (uint32_t i = 0; i < count; i++) {
+    ZooExhibit exhibit;
+    if (position + 12 > size) {
+      return 0;
+    }
+    exhibit.x = (int32_t) readUint32(data, position);
+    exhibit.y = (int32_t) readUint32(data, position + 4);
+    uint32_t name_length = readUint32(data, position + 8);
+    position += 12;
+    if (exhibit.x < 0 || exhibit.x > 1000 || exhibit.y < 0 || exhibit.y > 1000 ||
+        name_length > 64 || position + name_length > size) {
+      return 0;
+    }
+    for (uint32_t c = 0; c < name_length; c++) {
+      if (data[position + c] < 32 || data[position + c] >= 127) {
+        return 0;
+      }
+    }
+    exhibit.name.assign((const char *) data + position, name_length);
+    position += name_length;
+    // Entrance, rotation, six floats, 30 unknown bytes, extension type
+    if (position + 12 + 24 + 30 + 4 > size) {
+      return 0;
+    }
+    exhibit.entrance_x = (int32_t) readUint32(data, position);
+    exhibit.entrance_y = (int32_t) readUint32(data, position + 4);
+    exhibit.entrance_rotation = (int32_t) readUint32(data, position + 8);
+    exhibit.current_donations = readFloat(data, position + 12);
+    exhibit.last_donations = readFloat(data, position + 16);
+    exhibit.total_donations = readFloat(data, position + 20);
+    exhibit.current_upkeep = readFloat(data, position + 24);
+    exhibit.last_upkeep = readFloat(data, position + 28);
+    exhibit.total_upkeep = readFloat(data, position + 32);
+    position += 36;
+    // The record tail differs per format generation: the early variants
+    // carry 28 more bytes, the later ones 30 bytes, an extension type and
+    // extra data for tanks
+    exhibit.extension_type = 0;
+    if (variant == 'F' || variant == 'G') {
+      position += 28;
+    } else {
+      position += 30;
+      if (position + 4 > size) {
+        return 0;
+      }
+      exhibit.extension_type = readUint32(data, position);
+      position += 4;
+      if (exhibit.extension_type == 0x10000) {
+        // Tanks carry 21 more bytes
+        position += 21;
+      } else if (exhibit.extension_type != 0) {
+        // Show tanks and unknown extensions have variable data, give up
+        // on the rest of the list
+        exhibits.push_back(exhibit);
+        return 0;
+      }
+    }
+    if (position > size) {
+      return 0;
+    }
+    exhibits.push_back(exhibit);
+  }
+  return position;
+}
+
 ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
   const uint8_t * data = (const uint8_t *) raw;
   if (size < 0x30 || memcmp(data, "TZFB", 4) != 0) {
@@ -79,18 +165,37 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
     return nullptr;
   }
 
-  // Slide the terrain start until the end of the stream lands exactly on a
-  // valid object section. Exhibit records of unknown size may sit between
-  // the header and the terrain.
+  // The zoo entrance and the exhibit list follow the dimensions
+  int32_t entrance_x = (int32_t) readUint32(data, dims_offset + 8);
+  int32_t entrance_y = (int32_t) readUint32(data, dims_offset + 12);
+  std::vector<ZooExhibit> exhibits;
+  size_t exhibits_end = parseExhibits(data, size, dims_offset + 16, variant, exhibits);
+
   size_t tile_count = (size_t) width * (size_t) height;
   size_t terrain_size = tile_count * 10;
   size_t terrain_start = 0;
   bool found = false;
+  // When the exhibit list parsed cleanly the terrain follows it, after
+  // two undocumented values, and no searching is needed when the stream
+  // ends on a valid object section there
+  if (exhibits_end != 0) {
+    for (size_t skip : {(size_t) 8, (size_t) 0}) {
+      if (exhibits_end + skip + terrain_size <= size &&
+          isValidObjectAnchor(data, size, exhibits_end + skip + terrain_size)) {
+        terrain_start = exhibits_end + skip;
+        found = true;
+        break;
+      }
+    }
+  }
+  // Otherwise slide the terrain start until the end of the stream lands
+  // exactly on a valid object section, exhibit records of unknown size may
+  // sit between the header and the terrain.
   size_t search_end = size > terrain_size ? size - terrain_size : 0;
   if (search_end > 0x14 + 65536) {
     search_end = 0x14 + 65536;
   }
-  for (size_t start = 0x14; start <= search_end; start++) {
+  for (size_t start = 0x14; !found && start <= search_end; start++) {
     if (isValidObjectAnchor(data, size, start + terrain_size)) {
       terrain_start = start;
       found = true;
@@ -107,6 +212,9 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
   zoo->language = language;
   zoo->width = width;
   zoo->height = height;
+  zoo->entrance_x = entrance_x;
+  zoo->entrance_y = entrance_y;
+  zoo->exhibits = exhibits;
   zoo->tiles.reserve(tile_count);
   for (size_t i = 0; i < tile_count; i++) {
     size_t p = terrain_start + i * 10;

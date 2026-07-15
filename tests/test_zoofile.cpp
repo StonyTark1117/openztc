@@ -83,3 +83,78 @@ TEST_CASE("truncated terrain is rejected") {
   file.resize(file.size() / 2);
   CHECK(ZooFile::loadFromMemory(file.data(), file.size()) == nullptr);
 }
+
+// Builds an F-variant zoo with an entrance and one exhibit before the
+// terrain, following the layout the shipped maps use
+static std::vector<uint8_t> syntheticZooWithExhibit() {
+  std::vector<uint8_t> data;
+  auto push32 = [&data](uint32_t value) {
+    data.push_back(value & 0xFF);
+    data.push_back((value >> 8) & 0xFF);
+    data.push_back((value >> 16) & 0xFF);
+    data.push_back((value >> 24) & 0xFF);
+  };
+  auto pushFloat = [&data, &push32](float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, 4);
+    push32(bits);
+  };
+  const char * magic = "TZFBF";
+  data.insert(data.end(), magic, magic + 5);
+  data.push_back(0);
+  data.push_back(0);
+  data.push_back(0);
+  push32(1033);   // language
+  push32(20);     // width
+  push32(20);     // height
+  push32(5);      // entrance x
+  push32(9);      // entrance y
+  push32(1);      // exhibit count
+  push32(3);      // exhibit x
+  push32(4);      // exhibit y
+  const char * name = "Lion Land";
+  push32(9);
+  data.insert(data.end(), name, name + 9);
+  push32(6);      // entrance x
+  push32(7);      // entrance y
+  push32(2);      // entrance rotation
+  pushFloat(1.5f);   // current donations
+  pushFloat(2.5f);   // last donations
+  pushFloat(3.5f);   // total donations
+  pushFloat(4.5f);   // current upkeep
+  pushFloat(5.5f);   // last upkeep
+  pushFloat(6.5f);   // total upkeep
+  for (int i = 0; i < 28; i++) {
+    data.push_back(0);  // the F variant record tail
+  }
+  push32(0);      // the two undocumented values before the terrain
+  push32(0);
+  for (uint32_t i = 0; i < 20 * 20; i++) {
+    push32(0);
+    data.push_back(0x0F);
+    data.push_back(0x03);
+    push32(0);
+  }
+  // empty object section
+  push32(0);
+  return data;
+}
+
+TEST_CASE("exhibits and the entrance parse from the header") {
+  std::vector<uint8_t> file = syntheticZooWithExhibit();
+  ZooFile * zoo = ZooFile::loadFromMemory(file.data(), file.size());
+  REQUIRE(zoo != nullptr);
+  CHECK(zoo->getEntranceX() == 5);
+  CHECK(zoo->getEntranceY() == 9);
+  REQUIRE(zoo->getExhibits().size() == 1);
+  const ZooExhibit &exhibit = zoo->getExhibits()[0];
+  CHECK(exhibit.name == "Lion Land");
+  CHECK(exhibit.x == 3);
+  CHECK(exhibit.y == 4);
+  CHECK(exhibit.entrance_x == 6);
+  CHECK(exhibit.entrance_y == 7);
+  CHECK(exhibit.entrance_rotation == 2);
+  CHECK(exhibit.total_donations == doctest::Approx(3.5f));
+  CHECK(exhibit.total_upkeep == doctest::Approx(6.5f));
+  delete zoo;
+}
