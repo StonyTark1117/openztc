@@ -8,6 +8,8 @@
 // #define INTERNAL_HEIGHT 600
 
 Window::Window(const std::string &title, int width, int height, float fps_target) {
+    // Names the app in system dialogs like the screen saver inhibition list
+    SDL_SetAppMetadata("OpenZTC", NULL, "org.openztc.OpenZTC");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "couldn't init SDL: %s", SDL_GetError());
         exit(1);
