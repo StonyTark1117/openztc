@@ -186,12 +186,15 @@ seen before come up enabled, like dropping a `.ztd` into the game
 directory of the original. The manager never touches or distributes game
 data.
 
+Conflict display and loadouts are in: selecting a mod shows who
+overrides whom, and `openztc-loadout-<name>.txt` files in the mods
+directory (same format as the state file, create one by copying it)
+appear in the list where Enable / Disable applies them.
+
 Still planned, taking inspiration from
 [ModZT](https://github.com/songstormstudios/modzt) (MIT):
 
-- File conflict detection: two mods providing the same resource name is
-  already deterministic in the engine, the manager should show who wins.
-- Named loadouts/bundles that can be exported and imported.
+- Creating and editing loadouts in the screen itself.
 - Apply changes without restarting (resource map reload).
 
 ### 7. Later

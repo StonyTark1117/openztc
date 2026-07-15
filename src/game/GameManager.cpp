@@ -797,6 +797,10 @@ void GameManager::refreshModList() {
     for (const ModInfo &mod : this->mod_manager->getMods()) {
       items.push_back((mod.enabled ? "+ " : "-  ") + mod.file_name);
     }
+    // Loadouts hang below the mods, Enable / Disable applies them
+    for (const std::string &loadout : this->mod_manager->listLoadouts()) {
+      items.push_back("loadout: " + loadout);
+    }
   }
   if (items.empty()) {
     items.push_back("No mods found");
@@ -816,10 +820,15 @@ void GameManager::showSelectedMod() {
   }
   std::vector<std::string> lines;
   int selected_index = list_box->getSelectedIndex();
+  int mod_count = this->mod_manager != nullptr ? (int) this->mod_manager->getMods().size() : 0;
   if (this->mod_manager == nullptr || this->mod_manager->getMods().empty()) {
     lines.push_back("Put mod ztd files in the mods");
     lines.push_back("directory next to the game data");
-  } else if (selected_index < 0 || selected_index >= (int) this->mod_manager->getMods().size()) {
+  } else if (selected_index >= mod_count) {
+    // A loadout row
+    lines.push_back("A saved mod setup");
+    lines.push_back("Enable / Disable applies it");
+  } else if (selected_index < 0) {
     lines.push_back("Select a mod to manage it");
     lines.push_back("Earlier mods win conflicts");
   } else {
@@ -881,10 +890,18 @@ bool GameManager::handleTargetlessAction(UiAction action) {
         break;
       }
       int selected_index = list_box->getSelectedIndex();
-      if (selected_index < 0 || selected_index >= (int) this->mod_manager->getMods().size()) {
+      int mod_count = (int) this->mod_manager->getMods().size();
+      if (selected_index < 0) {
         break;
       }
-      if (action.source == MOD_TOGGLE_BUTTON_ID) {
+      if (selected_index >= mod_count) {
+        // A loadout row: Enable / Disable applies the loadout
+        std::vector<std::string> loadouts = this->mod_manager->listLoadouts();
+        int loadout_index = selected_index - mod_count;
+        if (action.source == MOD_TOGGLE_BUTTON_ID && loadout_index < (int) loadouts.size()) {
+          this->mod_manager->applyLoadout(loadouts[loadout_index]);
+        }
+      } else if (action.source == MOD_TOGGLE_BUTTON_ID) {
         this->mod_manager->toggle(selected_index);
       } else if (this->mod_manager->move(selected_index, -1)) {
         selected_index--;

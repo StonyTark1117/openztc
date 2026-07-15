@@ -108,3 +108,23 @@ TEST_CASE("conflicts list other enabled mods sharing resource names") {
   manager.toggle(1);
   CHECK(manager.getConflicts(0).empty());
 }
+
+TEST_CASE("loadouts apply their order and flags to known mods") {
+  ModsDirectory dir({"a.ztd", "b.ztd", "c.ztd"});
+  std::ofstream(dir.path + "/openztc-loadout-minimal.txt")
+      << "-c.ztd\n+b.ztd\n-a.ztd\n";
+  ModManager manager(dir.path);
+  manager.load();
+  std::vector<std::string> loadouts = manager.listLoadouts();
+  REQUIRE(loadouts.size() == 1);
+  CHECK(loadouts[0] == "minimal");
+  REQUIRE(manager.applyLoadout("minimal"));
+  REQUIRE(manager.getMods().size() == 3);
+  CHECK(manager.getMods()[0].file_name == "c.ztd");
+  CHECK(!manager.getMods()[0].enabled);
+  CHECK(manager.getMods()[1].file_name == "b.ztd");
+  CHECK(manager.getMods()[1].enabled);
+  CHECK(manager.getMods()[2].file_name == "a.ztd");
+  CHECK(!manager.getMods()[2].enabled);
+  CHECK(!manager.applyLoadout("missing"));
+}

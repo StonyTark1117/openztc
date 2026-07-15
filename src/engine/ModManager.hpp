@@ -42,6 +42,12 @@ public:
   // it are overridden by it.
   std::vector<std::string> getConflicts(int index);
 
+  // Loadouts are saved mod states: openztc-loadout-<name>.txt files in the
+  // mods directory with the same format as the state file. Applying one
+  // reorders and toggles the known mods to match and saves it as current.
+  std::vector<std::string> listLoadouts();
+  bool applyLoadout(const std::string &name);
+
 private:
   std::string mods_directory;
   std::string state_file;
