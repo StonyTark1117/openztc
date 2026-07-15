@@ -862,20 +862,45 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     static const int screen_direction_bit[4] = {2, 4, 8, 1};
     uint32_t tile_x = object->x / 64;
     uint32_t tile_y = object->y / 64;
-    int mask = 0;
-    if (tile_y > 0 && this->path_tiles.contains(((uint64_t) tile_x << 32) | (tile_y - 1))) {
-      mask |= screen_direction_bit[(3 + 4 - this->orientation) % 4];
+    // Sloped tiles use the four ramp pieces 1 to 4 instead of the mask
+    // ones, picked by which way the tile rises on screen
+    if (tile_x < this->zoo->getWidth() && tile_y < this->zoo->getHeight()) {
+      float nw = this->tileCornerHeight(tile_x, tile_y, 0);
+      float ne = this->tileCornerHeight(tile_x, tile_y, 1);
+      float se = this->tileCornerHeight(tile_x, tile_y, 2);
+      float sw = this->tileCornerHeight(tile_x, tile_y, 3);
+      if (!(nw == ne && ne == se && se == sw)) {
+        // The rising direction in the same slots the neighbor bits use:
+        // x+1 is 0, y+1 is 1, x-1 is 2, y-1 is 3
+        int rising;
+        if (sw + se > nw + ne) {
+          rising = 1;
+        } else if (nw + ne > sw + se) {
+          rising = 3;
+        } else if (ne + se > nw + sw) {
+          rising = 0;
+        } else {
+          rising = 2;
+        }
+        draw_key = std::to_string(1 + (rising + 4 - (int) this->orientation) % 4);
+      }
     }
-    if (this->path_tiles.contains(((uint64_t) (tile_x + 1) << 32) | tile_y)) {
-      mask |= screen_direction_bit[(0 + 4 - this->orientation) % 4];
+    if (draw_key.empty()) {
+      int mask = 0;
+      if (tile_y > 0 && this->path_tiles.contains(((uint64_t) tile_x << 32) | (tile_y - 1))) {
+        mask |= screen_direction_bit[(3 + 4 - this->orientation) % 4];
+      }
+      if (this->path_tiles.contains(((uint64_t) (tile_x + 1) << 32) | tile_y)) {
+        mask |= screen_direction_bit[(0 + 4 - this->orientation) % 4];
+      }
+      if (this->path_tiles.contains(((uint64_t) tile_x << 32) | (tile_y + 1))) {
+        mask |= screen_direction_bit[(1 + 4 - this->orientation) % 4];
+      }
+      if (tile_x > 0 && this->path_tiles.contains(((uint64_t) (tile_x - 1) << 32) | tile_y)) {
+        mask |= screen_direction_bit[(2 + 4 - this->orientation) % 4];
+      }
+      draw_key = std::to_string(5 + mask);
     }
-    if (this->path_tiles.contains(((uint64_t) tile_x << 32) | (tile_y + 1))) {
-      mask |= screen_direction_bit[(1 + 4 - this->orientation) % 4];
-    }
-    if (tile_x > 0 && this->path_tiles.contains(((uint64_t) (tile_x - 1) << 32) | tile_y)) {
-      mask |= screen_direction_bit[(2 + 4 - this->orientation) % 4];
-    }
-    draw_key = std::to_string(5 + mask);
     animation_path = "paths/" + object->code + "/idle/idle";
     cache_key = animation_path;
   } else if (object->category == "ambient" || object->category == "helicopter") {
