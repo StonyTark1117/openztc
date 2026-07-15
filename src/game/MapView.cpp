@@ -458,66 +458,63 @@ Animation * MapView::firstAnimation(const std::vector<std::string> &candidates, 
 
 // The terrain heights at the two grid corners a fence piece's edge spans.
 // Pieces at a half tile x sit on a y axis edge and the other way around;
-// start is the corner with the smaller coordinate along the run. The two
-// tiles flanking the edge can disagree about the corner heights where the
-// terrain has a cliff along the fence line — the original crowns the
-// fence on the higher side, so each corner takes the higher claim.
+// start is the corner with the smaller coordinate along the run. Each of
+// the two flanking tiles has its own idea of the edge's two corner
+// heights (they disagree across a cliff). The original slopes the fence
+// exactly where a flanking tile sees the edge itself sloping one step:
+// on deathmtn's cliff base the west tile slopes 2->1 and the wall is a
+// 30 degree piece, while a hard terrace cliff (both flanks flat, traced
+// on the fencetest save) keeps the wall flat. Start/end report the
+// sloping flank's pair when one exists.
 void MapView::fenceEdgeHeights(const ZooObject * object, float * start, float * end, bool * y_run_out,
                                float * ground) {
   *start = 0.0f;
   *end = 0.0f;
-  uint32_t width = this->zoo->getWidth();
-  uint32_t height = this->zoo->getHeight();
-  // The highest (or lowest) claim any of the four tiles meeting at a grid
-  // corner makes for that corner. Corner indices: 0 NW, 1 NE, 2 SE, 3 SW.
-  auto cornerClaim = [&](int cx, int cy, bool highest) -> float {
-    const int around[4][3] = {
-      {-1, -1, 2},  // the tile north west of the corner claims it as SE
-      {0, -1, 3},   // north east tile, SW
-      {-1, 0, 1},   // south west tile, NE
-      {0, 0, 0},    // south east tile, NW
-    };
-    float best = 0.0f;
-    bool found = false;
-    for (int i = 0; i < 4; i++) {
-      int tile_x = cx + around[i][0];
-      int tile_y = cy + around[i][1];
-      if (tile_x < 0 || tile_y < 0 || tile_x >= (int) width || tile_y >= (int) height) {
-        continue;
-      }
-      float h = this->tileCornerHeight((uint32_t) tile_x, (uint32_t) tile_y, around[i][2]);
-      if (!found || (highest ? h > best : h < best)) {
-        best = h;
-        found = true;
-      }
-    }
-    return best;
-  };
+  int width = (int) this->zoo->getWidth();
+  int height = (int) this->zoo->getHeight();
   float fraction_x = (float) (object->x % 64) / 64.0f;
   bool y_run = fraction_x <= 0.25f || fraction_x >= 0.75f;
   if (y_run_out != nullptr) {
     *y_run_out = y_run;
   }
-  int corner_ax;
-  int corner_ay;
-  int corner_bx;
-  int corner_by;
+  // Flank tiles and the corner indices (0 NW, 1 NE, 2 SE, 3 SW) that make
+  // up the edge in each, ordered start then end along the run
+  int flank_x[2];
+  int flank_y[2];
+  int corner_a[2];
+  int corner_b[2];
   if (y_run) {
-    corner_ax = (int) (((float) object->x / 64.0f) + 0.5f);
-    corner_ay = (int) (object->y / 64);
-    corner_bx = corner_ax;
-    corner_by = corner_ay + 1;
+    int edge_x = (int) (((float) object->x / 64.0f) + 0.5f);
+    int tile_y = (int) (object->y / 64);
+    flank_x[0] = edge_x - 1; flank_y[0] = tile_y; corner_a[0] = 1; corner_b[0] = 2;  // west tile: NE, SE
+    flank_x[1] = edge_x;     flank_y[1] = tile_y; corner_a[1] = 0; corner_b[1] = 3;  // east tile: NW, SW
   } else {
-    corner_ax = (int) (object->x / 64);
-    corner_ay = (int) (((float) object->y / 64.0f) + 0.5f);
-    corner_bx = corner_ax + 1;
-    corner_by = corner_ay;
+    int tile_x = (int) (object->x / 64);
+    int edge_y = (int) (((float) object->y / 64.0f) + 0.5f);
+    flank_x[0] = tile_x; flank_y[0] = edge_y - 1; corner_a[0] = 3; corner_b[0] = 2;  // north tile: SW, SE
+    flank_x[1] = tile_x; flank_y[1] = edge_y;     corner_a[1] = 0; corner_b[1] = 1;  // south tile: NW, NE
   }
-  *start = cornerClaim(corner_ax, corner_ay, true);
-  *end = cornerClaim(corner_bx, corner_by, true);
+  bool have = false;
+  for (int f = 0; f < 2; f++) {
+    if (flank_x[f] < 0 || flank_y[f] < 0 || flank_x[f] >= width || flank_y[f] >= height) {
+      continue;
+    }
+    float a = this->tileCornerHeight((uint32_t) flank_x[f], (uint32_t) flank_y[f], corner_a[f]);
+    float b = this->tileCornerHeight((uint32_t) flank_x[f], (uint32_t) flank_y[f], corner_b[f]);
+    if (!have) {
+      *start = a;
+      *end = b;
+      have = true;
+    }
+    if (a != b) {
+      // A sloping flank decides the piece's slope and direction
+      *start = a;
+      *end = b;
+      break;
+    }
+  }
   if (ground != nullptr) {
-    *ground = SDL_min(cornerClaim(corner_ax, corner_ay, false),
-                      cornerClaim(corner_bx, corner_by, false));
+    *ground = SDL_min(*start, *end);
   }
 }
 
@@ -986,18 +983,16 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     float edge_end = 0.0f;
     bool y_run = false;
     this->fenceEdgeHeights(object, &edge_start, &edge_end, &y_run);
-    // The original uses the slope art exactly where it stored a half step
-    // anchor (the midpoint of a truly sloped edge); everything else draws
-    // flat at the stored anchor, including the fractional anchors it
-    // computes along cliff bases (verified by tracing its coping against
-    // the stored elevations on deathmtn and the fencetest save).
-    if (((object->elevation % 16) + 16) % 16 == 8) {
-      float edge_span = edge_end - edge_start;
-      if (edge_span >= 0.0f) {
-        state = y_run ? "idle30p" : "idle30n";
-      } else {
-        state = y_run ? "idle30n" : "idle30p";
-      }
+    // The original slopes the piece exactly where a flanking tile sees
+    // the edge sloping one step (fenceEdgeHeights reports that flank's
+    // corner pair); hard cliffs with flat flanks stay flat even though
+    // the anchor is fractional (verified on deathmtn's cliff base and
+    // the fencetest terraces).
+    float edge_span = edge_end - edge_start;
+    if (edge_span == 1.0f) {
+      state = y_run ? "idle30p" : "idle30n";
+    } else if (edge_span == -1.0f) {
+      state = y_run ? "idle30n" : "idle30p";
     }
     if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
       SDL_Log("fence (%.2f, %.2f) %s edge %.1f -> %.1f state %s key %s",
