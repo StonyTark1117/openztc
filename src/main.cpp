@@ -29,6 +29,11 @@ int main(int argc, char **argv) {
   std::vector<Input> inputs;
 
   Window window("OpenZTC", config.getScreenWidth(), config.getScreenHeight(), 60.0f);
+  if (config.getKeepDisplayAwake()) {
+    // Long sessions should not fight the screen locker. keepDisplayAwake=0
+    // in an openztc section of zoo.ini turns this off.
+    SDL_DisableScreenSaver();
+  }
   CursorManager cursor_manager(&resource_manager);
   cursor_manager.setCursor(CursorRole::DEFAULT);
   GameManager game_manager(&resource_manager, &cursor_manager, &mod_manager);

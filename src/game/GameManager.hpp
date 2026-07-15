@@ -72,7 +72,8 @@ private:
   void setupModScreen();
   void refreshModList();
   void showSelectedMod();
-  void updateGameHud();
+  void updateGameHud(SDL_FRect * window_rect);
+  void setupGameHud();
   void leaveMap();
   std::string formatMoney(int64_t amount);
   void showSelectedScenario();

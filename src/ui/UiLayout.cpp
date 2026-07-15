@@ -10,6 +10,7 @@
 #include "UiEditableText.hpp"
 #include "UiImageSet.hpp"
 #include "UiStatusImage.hpp"
+#include "ZtMiniMap.hpp"
 #include "UiRadioSet.hpp"
 
 UiLayout::UiLayout(IniReader * ini_reader, ResourceManager * resource_manager, CursorManager * cursor_manager) {
@@ -70,12 +71,21 @@ void UiLayout::process_sections() {
       this->children.push_back((UiElement *) new UiImageSet(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UIStatusImage") {
       this->children.push_back((UiElement *) new UiStatusImage(this->ini_reader, this->resource_manager, section));
+    } else if (element_type == "ZTMiniMap") {
+      this->children.push_back((UiElement *) new ZtMiniMap(this->ini_reader, this->resource_manager, section));
     } else if (element_type == "UIRadioSet") {
       UiRadioSet * radio_set = new UiRadioSet(this->ini_reader, this->resource_manager, section);
       this->children.push_back((UiElement *) radio_set);
       this->radio_sets.push_back(radio_set);
     } else {
       SDL_Log("Support for element type %s is not yet implemented", element_type.c_str());
+      continue;
+    }
+    // State 1 hides an element, 16 is the "really really hidden" state
+    for (int state : this->ini_reader->getIntList(section, "state")) {
+      if (state == 1 || state == 16) {
+        this->children.back()->setActive(false);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 #include "MapView.hpp"
 
 #include <algorithm>
+#include <array>
 
 #include "../engine/CompassDirection.hpp"
 #include "../engine/Utils.hpp"
@@ -92,6 +93,142 @@ void MapView::tileToWorld(float tile_x, float tile_y, float * world_x, float * w
   }
   *world_x = rotated_u * TILE_HALF_WIDTH;
   *world_y = rotated_v * TILE_HALF_HEIGHT;
+}
+
+void MapView::tileToUnit(float tile_x, float tile_y, float * unit_x, float * unit_y) {
+  float world_x;
+  float world_y;
+  this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
+  // Bounds of the rotated map in world pixels
+  float width = (float) this->getMapWidth();
+  float height = (float) this->getMapHeight();
+  float min_x = 0.0f;
+  float max_x = 0.0f;
+  float min_y = 0.0f;
+  float max_y = 0.0f;
+  const float corners[4][2] = {{0.0f, 0.0f}, {width, 0.0f}, {width, height}, {0.0f, height}};
+  for (int i = 0; i < 4; i++) {
+    float corner_x;
+    float corner_y;
+    this->tileToWorld(corners[i][0], corners[i][1], &corner_x, &corner_y);
+    min_x = SDL_min(min_x, corner_x);
+    max_x = SDL_max(max_x, corner_x);
+    min_y = SDL_min(min_y, corner_y);
+    max_y = SDL_max(max_y, corner_y);
+  }
+  *unit_x = max_x > min_x ? (world_x - min_x) / (max_x - min_x) : 0.0f;
+  *unit_y = max_y > min_y ? (world_y - min_y) / (max_y - min_y) : 0.0f;
+}
+
+void MapView::screenToTile(float screen_x, float screen_y, SDL_FRect * window_rect, float * tile_x, float * tile_y) {
+  float world_x = (screen_x - window_rect->w / 2.0f) / this->zoom + this->camera_x;
+  float world_y = (screen_y - window_rect->h / 2.0f) / this->zoom + this->camera_y;
+  float rotated_u = world_x / TILE_HALF_WIDTH;
+  float rotated_v = world_y / TILE_HALF_HEIGHT;
+  float u;
+  float v;
+  switch (this->orientation & 3) {
+    case 1:
+      u = -rotated_v;
+      v = rotated_u;
+      break;
+    case 2:
+      u = -rotated_u;
+      v = -rotated_v;
+      break;
+    case 3:
+      u = rotated_v;
+      v = -rotated_u;
+      break;
+    default:
+      u = rotated_u;
+      v = rotated_v;
+      break;
+  }
+  *tile_x = (u + v) / 2.0f;
+  *tile_y = (v - u) / 2.0f;
+}
+
+// Reads a color list like the miniclr sections have
+static bool sectionColor(IniReader * reader, const std::string &section, uint8_t * rgba) {
+  std::vector<int> values = reader->getIntList(section, "color");
+  if (values.size() != 3) {
+    return false;
+  }
+  rgba[0] = (uint8_t) values[0];
+  rgba[1] = (uint8_t) values[1];
+  rgba[2] = (uint8_t) values[2];
+  rgba[3] = 255;
+  return true;
+}
+
+std::vector<uint8_t> MapView::buildMinimapColors(IniReader * minimap_colors) {
+  std::vector<uint8_t> colors;
+  if (this->zoo == nullptr || minimap_colors == nullptr) {
+    return colors;
+  }
+  uint32_t width = this->zoo->getWidth();
+  uint32_t height = this->zoo->getHeight();
+  colors.assign((size_t) width * height * 4, 255);
+
+  // Terrain type numbers to miniclr sections: the tiletex sections carry
+  // the type and their names minus the tt prefix name the color sections
+  std::unordered_map<int, std::array<uint8_t, 4>> terrain_colors;
+  for (std::string config_name : this->resource_manager->getResourceNamesWithExtension("CFG")) {
+    if (config_name.rfind("terrain/tiletex", 0) != 0) {
+      continue;
+    }
+    IniReader * reader = this->resource_manager->getIniReader(config_name);
+    if (reader == nullptr) {
+      continue;
+    }
+    for (std::string section : reader->getSections()) {
+      int type = reader->getInt(section, "type", -1);
+      if (type < 0 || terrain_colors.contains(type)) {
+        continue;
+      }
+      std::string color_section = section.rfind("tt", 0) == 0 ? section.substr(2) : section;
+      std::array<uint8_t, 4> color;
+      if (sectionColor(minimap_colors, color_section, color.data())) {
+        terrain_colors[type] = color;
+      }
+    }
+    delete reader;
+  }
+  for (uint32_t tile_y = 0; tile_y < height; tile_y++) {
+    for (uint32_t tile_x = 0; tile_x < width; tile_x++) {
+      auto entry = terrain_colors.find(this->zoo->getTile(tile_x, tile_y).type);
+      if (entry != terrain_colors.end()) {
+        SDL_memcpy(&colors[((size_t) tile_y * width + tile_x) * 4], entry->second.data(), 4);
+      }
+    }
+  }
+
+  // Objects paint over the terrain in their color class
+  for (const ZooObject &object : this->zoo->getObjects()) {
+    std::string color_section;
+    if (object.category == "paths") {
+      color_section = "path";
+    } else if (object.category == "fences" || object.category == "tankwall") {
+      color_section = object.subcategory == "zoowall" ? "zoowall" : "habitat";
+    } else if (object.category == "building") {
+      color_section = "buildings";
+    } else if (object.category == "objects" && object.subcategory == "foliage") {
+      color_section = "foliage";
+    } else {
+      continue;
+    }
+    uint8_t color[4];
+    if (!sectionColor(minimap_colors, color_section, color)) {
+      continue;
+    }
+    uint32_t tile_x = object.x / 64;
+    uint32_t tile_y = object.y / 64;
+    if (tile_x < width && tile_y < height) {
+      SDL_memcpy(&colors[((size_t) tile_y * width + tile_x) * 4], color, 4);
+    }
+  }
+  return colors;
 }
 
 // Paint order: back to front by screen depth

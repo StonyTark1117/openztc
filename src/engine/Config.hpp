@@ -31,6 +31,9 @@ public:
   // between sessions. Only that one line changes, the rest of the file is
   // preserved as it is.
   void setFreeformStartingCash(int value);
+  // Whether to keep the display awake while the game runs. An openztc
+  // section option in zoo.ini, on unless keepDisplayAwake=0 is set.
+  bool getKeepDisplayAwake();
 private:
   IniReader * reader = NULL;
   std::string file_path = "";

@@ -27,6 +27,17 @@ public:
   // Map orientation in quarter turns, like the rotate camera option in game
   void setOrientation(int orientation);
 
+  uint32_t getMapWidth() { return this->zoo != nullptr ? this->zoo->getWidth() : 0; }
+  uint32_t getMapHeight() { return this->zoo != nullptr ? this->zoo->getHeight() : 0; }
+  // One RGBA color per tile for the minimap, terrain colored by the
+  // miniclr sections with paths, foliage, fences and buildings over it
+  std::vector<uint8_t> buildMinimapColors(IniReader * minimap_colors);
+  // Position of a tile in the unit square around the rotated map, matching
+  // what the minimap draws
+  void tileToUnit(float tile_x, float tile_y, float * unit_x, float * unit_y);
+  // The tile under a window position, ignoring terrain height
+  void screenToTile(float screen_x, float screen_y, SDL_FRect * window_rect, float * tile_x, float * tile_y);
+
   // Returns false when the user wants to leave the map
   bool handleInputs(std::vector<Input> &inputs);
   void draw(SDL_Renderer * renderer, SDL_FRect * window_rect);

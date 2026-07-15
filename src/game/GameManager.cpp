@@ -9,6 +9,23 @@
 #include "../ui/UiText.hpp"
 #include "../ui/UiEditableText.hpp"
 #include "../ui/UiButton.hpp"
+#include "../ui/UiStatusImage.hpp"
+#include "../ui/ZtMiniMap.hpp"
+
+// The date and money displays in the in game toolbar, ui/main.lyt
+#define HUD_DATE_ID 1030
+#define HUD_MONEY_ID 1016
+#define HUD_ZOO_STATUS_ID 1015
+#define HUD_ANIMAL_STATUS_ID 1011
+#define HUD_GUEST_STATUS_ID 1013
+#define HUD_TREE_TOGGLE_ID 1066
+#define HUD_BUILDING_TOGGLE_ID 1067
+#define HUD_GUEST_TOGGLE_ID 1068
+#define HUD_MINIMAP_ID 1026
+#define HUD_PAUSE_BUTTON_ID 1071
+#define HUD_PLAY_BUTTON_ID 1072
+// The month names in the lang dlls, 22101 is Jan
+#define MONTH_STRING_ID_BASE 22101
 
 GameManager::GameManager(ResourceManager * resource_manager, CursorManager * cursor_manager, ModManager * mod_manager) {
   this->resource_manager = resource_manager;
@@ -35,6 +52,28 @@ bool GameManager::HandleInputs(std::vector<Input> &inputs) {
     for (Input input : inputs) {
       if (input.event == InputEvent::PAUSE_TOGGLE) {
         this->simulation_paused = !this->simulation_paused;
+      }
+    }
+    // The toolbar sees the inputs first: the minimap jumps the camera and
+    // the pause button toggles, everything else is not wired up yet and
+    // gets swallowed so half working panels do not open
+    if (this->layouts.contains("main")) {
+      UiAction hud_action = this->layouts["main"]->handleInputs(inputs);
+      if (hud_action.source == HUD_MINIMAP_ID) {
+        ZtMiniMap * minimap = dynamic_cast<ZtMiniMap*>(this->layouts["main"]->getChildWithId(HUD_MINIMAP_ID));
+        float tile_x = 0.0f;
+        float tile_y = 0.0f;
+        if (minimap != nullptr && minimap->getClickedTile(&tile_x, &tile_y)) {
+          this->map_view->lookAtTile(tile_x, tile_y);
+        }
+        return true;
+      }
+      if (hud_action.source == HUD_PAUSE_BUTTON_ID || hud_action.source == HUD_PLAY_BUTTON_ID) {
+        this->simulation_paused = !this->simulation_paused;
+        return true;
+      }
+      if (hud_action.source != 0) {
+        return true;
       }
     }
     if (!this->map_view->handleInputs(inputs)) {
@@ -110,7 +149,7 @@ void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     this->map_view->draw(renderer, window_rect);
     // The in game toolbar draws over the map. Only its date and money
     // displays are wired up so far.
-    this->updateGameHud();
+    this->updateGameHud(window_rect);
     if (this->layouts.contains("main")) {
       this->layouts["main"]->draw(renderer, window_rect);
     }
@@ -523,6 +562,7 @@ void GameManager::startFreeformMap() {
   this->shown_month = -1;
   this->shown_year = -1;
   this->shown_cash = -1;
+  this->setupGameHud();
 }
 
 void GameManager::leaveMap() {
@@ -540,11 +580,43 @@ void GameManager::TickSimulation() {
   }
 }
 
-// The date and money displays in the in game toolbar, ui/main.lyt
-#define HUD_DATE_ID 1030
-#define HUD_MONEY_ID 1016
-// The month names in the lang dlls, 22101 is Jan
-#define MONTH_STRING_ID_BASE 22101
+
+// Bring the toolbar into the state the original shows on a fresh zoo: a
+// yellow-ish zoo rating, empty animal and guest meters until there are
+// animals and guests, and no entity visibility toggles until they work
+void GameManager::setupGameHud() {
+  if (!this->layouts.contains("main")) {
+    return;
+  }
+  UiLayout * layout = this->layouts["main"];
+  UiStatusImage * zoo_status = dynamic_cast<UiStatusImage*>(layout->getChildWithId(HUD_ZOO_STATUS_ID));
+  if (zoo_status != nullptr) {
+    zoo_status->setValue(35);
+  }
+  for (int id : {HUD_ANIMAL_STATUS_ID, HUD_GUEST_STATUS_ID, HUD_TREE_TOGGLE_ID, HUD_BUILDING_TOGGLE_ID, HUD_GUEST_TOGGLE_ID}) {
+    UiElement * element = layout->getChildWithId(id);
+    if (element != nullptr) {
+      element->setActive(false);
+    }
+  }
+  ZtMiniMap * minimap = dynamic_cast<ZtMiniMap*>(layout->getChildWithId(HUD_MINIMAP_ID));
+  if (minimap != nullptr && this->map_view != nullptr) {
+    IniReader * minimap_colors = this->resource_manager->getIniReader("ui/miniclr.cfg");
+    if (minimap_colors != nullptr) {
+      minimap->setTiles(this->map_view->buildMinimapColors(minimap_colors),
+                        (int) this->map_view->getMapWidth(), (int) this->map_view->getMapHeight());
+      delete minimap_colors;
+    }
+    // The corner positions describe the map orientation to the widget
+    SDL_FPoint origin;
+    SDL_FPoint x_end;
+    SDL_FPoint y_end;
+    this->map_view->tileToUnit(0.0f, 0.0f, &origin.x, &origin.y);
+    this->map_view->tileToUnit((float) this->map_view->getMapWidth(), 0.0f, &x_end.x, &x_end.y);
+    this->map_view->tileToUnit(0.0f, (float) this->map_view->getMapHeight(), &y_end.x, &y_end.y);
+    minimap->setTileTransform(origin, x_end, y_end);
+  }
+}
 
 std::string GameManager::formatMoney(int64_t amount) {
   std::string cash_string = std::to_string(amount);
@@ -554,11 +626,28 @@ std::string GameManager::formatMoney(int64_t amount) {
   return "$" + cash_string;
 }
 
-void GameManager::updateGameHud() {
+void GameManager::updateGameHud(SDL_FRect * window_rect) {
   if (this->simulation == nullptr || !this->layouts.contains("main")) {
     return;
   }
   UiLayout * layout = this->layouts["main"];
+  // The view outline on the minimap follows the camera
+  ZtMiniMap * minimap = dynamic_cast<ZtMiniMap*>(layout->getChildWithId(HUD_MINIMAP_ID));
+  if (minimap != nullptr && this->map_view != nullptr) {
+    SDL_FPoint quad[4];
+    const float corners[4][2] = {
+      {0.0f, 0.0f}, {window_rect->w, 0.0f}, {window_rect->w, window_rect->h}, {0.0f, window_rect->h}};
+    for (int i = 0; i < 4; i++) {
+      this->map_view->screenToTile(corners[i][0], corners[i][1], window_rect, &quad[i].x, &quad[i].y);
+    }
+    minimap->setViewQuad(quad);
+  }
+  // The play button covers the pause button while paused. The pause
+  // button stays active because the date display anchors to it.
+  UiElement * play_button = layout->getChildWithId(HUD_PLAY_BUTTON_ID);
+  if (play_button != nullptr) {
+    play_button->setActive(this->simulation_paused);
+  }
   int month = this->simulation->getMonth();
   int year = this->simulation->getYear();
   if (month != this->shown_month || year != this->shown_year) {

@@ -107,6 +107,10 @@ int Config::getFreeformCashMax() {
   return reader->getInt("UI", "MSMaxCash", 500000);
 }
 
+bool Config::getKeepDisplayAwake() {
+  return reader->getInt("openztc", "keepDisplayAwake", 1) != 0;
+}
+
 void Config::setFreeformStartingCash(int value) {
   // Rewrite only the MSStartingCash line inside the UI section, keeping
   // every other byte of the user's zoo.ini as it is. The file is written
