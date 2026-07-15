@@ -3,6 +3,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <SDL3/SDL.h>
@@ -55,6 +56,8 @@ private:
   ZooFile * zoo = nullptr;
 
   std::unordered_map<int, SDL_Texture *> terrain_textures;
+  // Terrain types with a water= flag in the tiletex configs
+  std::unordered_set<int> water_terrain_types;
   bool textures_loaded = false;
 
   // Objects sorted in paint order and their animations by object code
@@ -99,6 +102,8 @@ private:
   void drawSimGuests(SDL_Renderer * renderer, float center_x, float center_y);
   void drawSimEntity(SDL_Renderer * renderer, float center_x, float center_y,
                      const std::string &animation_path, int32_t x, int32_t y, uint8_t facing);
+  bool isWaterAt(int32_t x, int32_t y);
+  Animation * firstAnimation(const std::vector<std::string> &candidates, const std::string &cache_key);
   void loadObjectRegistry();
   std::string registryLookup(const std::string &section, const std::string &key);
   std::string objectArtPath(const ZooObject * object);

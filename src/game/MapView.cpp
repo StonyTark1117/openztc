@@ -324,6 +324,40 @@ float MapView::heightAt(float tile_x, float tile_y) {
   return north + (south - north) * fy;
 }
 
+// Whether the tile under an entity position (in 64ths of a tile) is a
+// water type, which switches animals to their swimming art
+bool MapView::isWaterAt(int32_t x, int32_t y) {
+  if (x < 0 || y < 0) {
+    return false;
+  }
+  uint32_t tile_x = (uint32_t) x / 64;
+  uint32_t tile_y = (uint32_t) y / 64;
+  if (tile_x >= this->zoo->getWidth() || tile_y >= this->zoo->getHeight()) {
+    return false;
+  }
+  return this->water_terrain_types.contains(this->zoo->getTile(tile_x, tile_y).type);
+}
+
+// The first candidate animation that exists, cached under the given key —
+// including the misses, so absent art is only searched once
+Animation * MapView::firstAnimation(const std::vector<std::string> &candidates, const std::string &cache_key) {
+  if (this->object_animations.contains(cache_key)) {
+    return this->object_animations[cache_key];
+  }
+  Animation * found = nullptr;
+  for (const std::string &candidate : candidates) {
+    found = this->resource_manager->getAnimation(candidate);
+    if (found != nullptr) {
+      break;
+    }
+  }
+  this->object_animations[cache_key] = found;
+  if (found == nullptr) {
+    this->missing_object_art++;
+  }
+  return found;
+}
+
 // The terrain heights at the two grid corners a fence piece's edge spans.
 // Pieces at a half tile x sit on a y axis edge and the other way around;
 // start is the corner with the smaller coordinate along the run.
@@ -413,6 +447,9 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
     for (std::string section : reader->getSections()) {
       int type = reader->getInt(section, "type", -1);
       std::string texture_name = reader->get(section, "texture");
+      if (type >= 0 && reader->getInt(section, "water", 0) > 0) {
+        this->water_terrain_types.insert(type);
+      }
       if (type < 0 || texture_name.empty() || this->terrain_textures.contains(type)) {
         continue;
       }
@@ -858,7 +895,19 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
       return nullptr;
     }
     if (object->category == "animals") {
-      animation_path = "animals/" + object->subcategory + "/" + object->code + "/stand/stand";
+      // Animals in water swim; aquatic species have no stand art at all
+      // and fall back to their surface swim
+      static const char * entity_directions_animal[8] = {"SE", "S", "SW", "W", "NW", "N", "NE", "E"};
+      draw_key = entity_directions_animal[(object->rotation + 14 - 2 * (uint32_t) this->orientation) % 8];
+      std::string base = "animals/" + object->subcategory + "/" + object->code + "/";
+      bool in_water = this->isWaterAt((int32_t) object->x, (int32_t) object->y);
+      std::vector<std::string> candidates;
+      if (in_water) {
+        candidates = {base + "swim/swim", base + "surfswim/surfswim", base + "stand/stand"};
+      } else {
+        candidates = {base + "stand/stand", base + "surfswim/surfswim"};
+      }
+      return this->firstAnimation(candidates, base + (in_water ? "#water" : "#land"));
     } else if (object->category == "guests") {
       // The layered sprite art, one set per guest type
       std::string body = "lsmguest";
@@ -1075,10 +1124,24 @@ void MapView::drawSimGuests(SDL_Renderer * renderer, float center_x, float cente
     this->drawSimEntity(renderer, center_x, center_y, "guests/" + body + "/" + body, guest.x, guest.y, guest.facing);
   }
   for (const SimAnimal &animal : this->sim_animals) {
-    // Walking animals use their walk art, resting ones stand
-    const char * behavior = (animal.x == animal.target_x && animal.y == animal.target_y) ? "stand" : "walk";
-    this->drawSimEntity(renderer, center_x, center_y,
-                        "animals/" + animal.species + "/" + animal.sex + "/" + behavior + "/" + behavior,
-                        animal.x, animal.y, animal.facing);
+    // Walking animals use their walk art, resting ones stand; animals in
+    // water swim either way, and aquatic species without land art fall
+    // back to their surface swim
+    std::string base = "animals/" + animal.species + "/" + animal.sex + "/";
+    bool resting = animal.x == animal.target_x && animal.y == animal.target_y;
+    bool in_water = this->isWaterAt(animal.x, animal.y);
+    std::vector<std::string> candidates;
+    if (in_water) {
+      candidates = {base + "swim/swim", base + "surfswim/surfswim",
+                    base + (resting ? "stand/stand" : "walk/walk")};
+    } else {
+      candidates = {base + (resting ? "stand/stand" : "walk/walk"), base + "surfswim/surfswim"};
+    }
+    std::string cache_key = base + (in_water ? "#simwater" : (resting ? "#simstand" : "#simwalk"));
+    Animation * animation = this->firstAnimation(candidates, cache_key);
+    if (animation == nullptr) {
+      continue;
+    }
+    this->drawSimEntity(renderer, center_x, center_y, cache_key, animal.x, animal.y, animal.facing);
   }
 }
