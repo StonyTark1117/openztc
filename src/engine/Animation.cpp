@@ -83,7 +83,7 @@ bool Animation::getSizeByKey(const std::string &key, float * w, float * h) {
   return false;
 }
 
-void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key) {
+void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key, bool mirrored) {
   if (!this->textures.contains(key) || this->textures[key].empty()) {
     if (!this->surfaces.contains(key) || this->surfaces[key].empty()) {
       return;
@@ -108,7 +108,13 @@ void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const 
   if (this->textures[key][frame] == nullptr) {
     frame = 0;
   }
-  SDL_RenderTexture(renderer, this->textures[key][frame], NULL, dest_rect);
+  if (mirrored) {
+    // West side views of most entity art are the east side ones flipped
+    SDL_RenderTextureRotated(renderer, this->textures[key][frame], NULL, dest_rect, 0.0, NULL,
+                             SDL_FLIP_HORIZONTAL);
+  } else {
+    SDL_RenderTexture(renderer, this->textures[key][frame], NULL, dest_rect);
+  }
 }
 
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {

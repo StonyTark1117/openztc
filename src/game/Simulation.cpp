@@ -174,19 +174,20 @@ void Simulation::updateGuests() {
       guest.target_y = options[choice][1] * 64 + 32;
     }
     // Walk toward the target, one axis at a time since path steps are
-    // axis aligned. The facing follows the movement, clockwise from SE.
+    // axis aligned. The facing follows the movement, clockwise from NW
+    // like the save format stores it: 2 faces +x, 4 +y, 6 -x, 0 -y.
     if (guest.x < guest.target_x) {
       guest.x += SDL_min(GUEST_SPEED_PER_TICK, guest.target_x - guest.x);
-      guest.facing = 0;
+      guest.facing = 2;
     } else if (guest.x > guest.target_x) {
       guest.x -= SDL_min(GUEST_SPEED_PER_TICK, guest.x - guest.target_x);
-      guest.facing = 4;
+      guest.facing = 6;
     } else if (guest.y < guest.target_y) {
       guest.y += SDL_min(GUEST_SPEED_PER_TICK, guest.target_y - guest.y);
-      guest.facing = 2;
+      guest.facing = 4;
     } else if (guest.y > guest.target_y) {
       guest.y -= SDL_min(GUEST_SPEED_PER_TICK, guest.y - guest.target_y);
-      guest.facing = 6;
+      guest.facing = 0;
     }
   }
   if (this->spawn_tile_x >= 0 && this->guests.size() < GUEST_LIMIT &&
@@ -254,16 +255,16 @@ void Simulation::updateAnimals() {
     }
     if (animal.x < animal.target_x) {
       animal.x += SDL_min(ANIMAL_SPEED_PER_TICK, animal.target_x - animal.x);
-      animal.facing = 0;
+      animal.facing = 2;
     } else if (animal.x > animal.target_x) {
       animal.x -= SDL_min(ANIMAL_SPEED_PER_TICK, animal.x - animal.target_x);
-      animal.facing = 4;
+      animal.facing = 6;
     } else if (animal.y < animal.target_y) {
       animal.y += SDL_min(ANIMAL_SPEED_PER_TICK, animal.target_y - animal.y);
-      animal.facing = 2;
+      animal.facing = 4;
     } else if (animal.y > animal.target_y) {
       animal.y -= SDL_min(ANIMAL_SPEED_PER_TICK, animal.y - animal.target_y);
-      animal.facing = 6;
+      animal.facing = 0;
     }
   }
 }

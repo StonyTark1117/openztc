@@ -25,7 +25,7 @@ public:
     // The sprite box relative to the world anchor point, from the ani file
     void setBox(float x0, float y0, float x1, float y1);
     bool getBox(float * x0, float * y0, float * width, float * height);
-    void drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key);
+    void drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key, bool mirrored=false);
 
     void queryTexture(CompassDirection direction, float * w, float * h);
 private:

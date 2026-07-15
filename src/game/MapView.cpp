@@ -558,16 +558,25 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   this->drawObjects(renderer, window_rect, center_x, center_y);
 }
 
-// The rotation field steps in increments of 2 per quarter turn. The ring is
-// in clockwise screen order, so rotating the map by a quarter turn shifts
-// which direction art a facing needs by one step.
-// The rotation value ring is one step ahead of the art direction it shows
-// in the original: rotation 6 draws the SW view at the default camera
-// (orientation 1), verified against the entrance arch, gate booths and
-// hedges of fshore.zoo. Each camera quarter turn moves one more step.
+// The rotation field steps in increments of 2 per quarter turn, clockwise
+// with rotation 0 facing NW: rotation 6 draws the SW view at the default
+// camera (orientation 1), verified against the entrance arch, gate booths
+// and hedges of fshore.zoo. Each camera quarter turn moves one more step.
 std::string MapView::rotationDirection(uint32_t rotation) {
   const char * directions[4] = {"SE", "SW", "NW", "NE"};
   return directions[((rotation / 2) + 7 - (uint32_t) this->orientation) % 4];
+}
+
+// The horizontally flipped counterpart of a direction key. Most entity art
+// only ships the east side views and the west side ones draw mirrored.
+static std::string mirrorDirectionKey(const std::string &key) {
+  if (key == "SW") return "SE";
+  if (key == "SE") return "SW";
+  if (key == "W") return "E";
+  if (key == "E") return "W";
+  if (key == "NW") return "NE";
+  if (key == "NE") return "NW";
+  return "";
 }
 
 void MapView::loadObjectRegistry() {
@@ -727,9 +736,11 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
       std::string gender = object->code == "f" ? "f" : "m";
       animation_path = "staff/ls" + gender + kind + "/ls" + gender + kind;
     }
-    // Entities face eight directions, clockwise from SE like the objects
+    // Entities face eight directions clockwise from NW — the same base as
+    // the object ring, verified against the original on a fresh save's
+    // polar bears (facing 6 shows the SW view, 7 the W view)
     static const char * entity_directions[8] = {"SE", "S", "SW", "W", "NW", "N", "NE", "E"};
-    draw_key = entity_directions[(object->rotation + 8 - 2 * (uint32_t) this->orientation) % 8];
+    draw_key = entity_directions[(object->rotation + 14 - 2 * (uint32_t) this->orientation) % 8];
     cache_key = animation_path;
   } else {
     // Tank walls carry a piece code like fences do, plain objects face
@@ -804,13 +815,22 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     if (animation == nullptr) {
       continue;
     }
-    // Art without the wanted direction, like single state food pieces,
-    // draws its default animation instead
+    // Art without the wanted direction draws the mirrored counterpart
+    // flipped when one exists (entity art usually only ships the east
+    // side views); otherwise, like single state food pieces, it draws
+    // its default animation instead
+    bool mirrored = false;
     if (!draw_key.empty()) {
       float key_width = 0.0f;
       float key_height = 0.0f;
       if (!animation->getSizeByKey(draw_key, &key_width, &key_height)) {
-        draw_key.clear();
+        std::string mirror_key = mirrorDirectionKey(draw_key);
+        if (!mirror_key.empty() && animation->getSizeByKey(mirror_key, &key_width, &key_height)) {
+          draw_key = mirror_key;
+          mirrored = true;
+        } else {
+          draw_key.clear();
+        }
       }
     }
     // Anchor the sprite by the box its ani file declares around the world
@@ -831,14 +851,16 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
       box_x0 = -sprite_width / 2.0f;
       box_y0 = -sprite_height;
     }
+    // Mirroring flips the box around the anchor point too
+    float destination_x0 = mirrored ? -(box_x0 + sprite_width) : box_x0;
     SDL_FRect destination = {
-      screen_x + box_x0 * this->zoom,
+      screen_x + destination_x0 * this->zoom,
       screen_y + box_y0 * this->zoom,
       sprite_width * this->zoom,
       sprite_height * this->zoom,
     };
     if (!draw_key.empty()) {
-      animation->drawByKey(renderer, &destination, draw_key);
+      animation->drawByKey(renderer, &destination, draw_key, mirrored);
     } else {
       animation->draw(renderer, &destination);
     }
@@ -872,7 +894,7 @@ void MapView::drawSimEntity(SDL_Renderer * renderer, float center_x, float cente
   }
   float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
   float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
-  std::string draw_key = entity_directions[(facing + 8 - 2 * (uint32_t) this->orientation) % 8];
+  std::string draw_key = entity_directions[(facing + 14 - 2 * (uint32_t) this->orientation) % 8];
   float box_x0 = 0.0f;
   float box_y0 = 0.0f;
   float sprite_width = 0.0f;
@@ -886,17 +908,25 @@ void MapView::drawSimEntity(SDL_Renderer * renderer, float center_x, float cente
   }
   float key_width = 0.0f;
   float key_height = 0.0f;
+  bool mirrored = false;
   if (!animation->getSizeByKey(draw_key, &key_width, &key_height)) {
-    draw_key.clear();
+    std::string mirror_key = mirrorDirectionKey(draw_key);
+    if (!mirror_key.empty() && animation->getSizeByKey(mirror_key, &key_width, &key_height)) {
+      draw_key = mirror_key;
+      mirrored = true;
+    } else {
+      draw_key.clear();
+    }
   }
+  float destination_x0 = mirrored ? -(box_x0 + sprite_width) : box_x0;
   SDL_FRect destination = {
-    screen_x + box_x0 * this->zoom,
+    screen_x + destination_x0 * this->zoom,
     screen_y + box_y0 * this->zoom,
     sprite_width * this->zoom,
     sprite_height * this->zoom,
   };
   if (!draw_key.empty()) {
-    animation->drawByKey(renderer, &destination, draw_key);
+    animation->drawByKey(renderer, &destination, draw_key, mirrored);
   } else {
     animation->draw(renderer, &destination);
   }
