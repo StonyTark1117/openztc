@@ -628,10 +628,34 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   } else if (object->category == "animals" || object->category == "guests" ||
              object->category == "keeper" || object->category == "maint" ||
              object->category == "tour") {
-    // Entity records do not use the static object layout: their heads are
-    // stats and the positions sit at name-dependent offsets deeper in the
-    // record, still undecoded. Skipped until that is reverse engineered.
-    return nullptr;
+    // Entities stand still until the simulation drives them. Records whose
+    // position could not be decoded stay hidden instead of piling up in a
+    // map corner.
+    if (object->x == 0 && object->y == 0) {
+      return nullptr;
+    }
+    if (object->category == "animals") {
+      animation_path = "animals/" + object->subcategory + "/" + object->code + "/stand/stand";
+    } else if (object->category == "guests") {
+      // The layered sprite art, one set per guest type
+      std::string body = "lsmguest";
+      if (object->subcategory == "woman") {
+        body = "lsfguest";
+      } else if (object->subcategory == "boy") {
+        body = "lsbguest";
+      } else if (object->subcategory == "girl") {
+        body = "lsgguest";
+      }
+      animation_path = "guests/" + body + "/" + body;
+    } else {
+      std::string kind = object->category == "keeper" ? "keepr" : object->category == "maint" ? "maint" : "guide";
+      std::string gender = object->code == "f" ? "f" : "m";
+      animation_path = "staff/ls" + gender + kind + "/ls" + gender + kind;
+    }
+    // Entities face eight directions, clockwise from SE like the objects
+    static const char * entity_directions[8] = {"SE", "S", "SW", "W", "NW", "N", "NE", "E"};
+    draw_key = entity_directions[(object->rotation + 8 - 2 * (uint32_t) this->orientation) % 8];
+    cache_key = animation_path;
   } else {
     // Tank walls carry a piece code like fences do, plain objects face
     // where their rotation points

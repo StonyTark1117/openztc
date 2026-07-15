@@ -233,6 +233,46 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
   return zoo;
 }
 
+static bool isEntityCategory(const std::string &category) {
+  return category == "animals" || category == "guests" || category == "keeper" ||
+         category == "maint" || category == "tour";
+}
+
+// Entity records keep their position next to their display name: the name
+// is a length-prefixed printable string ("Polar Bear 1") and the position
+// in 64ths of a tile, a height and the facing (0-7) sit right before it.
+// The head of the record holds stats instead, so the static layout does
+// not apply. Verified against every entity in the shipped maps.
+static bool findEntityPosition(const uint8_t * data, size_t size, uint32_t map_size, ZooObject &object) {
+  for (size_t offset = 24; offset + 4 <= size; offset++) {
+    uint32_t name_length = readUint32(data, offset);
+    if (name_length < 3 || name_length > 32 || offset + 4 + name_length > size || offset < 20) {
+      continue;
+    }
+    bool printable = true;
+    for (uint32_t c = 0; c < name_length && printable; c++) {
+      printable = data[offset + 4 + c] >= 32 && data[offset + 4 + c] < 127;
+    }
+    if (!printable) {
+      continue;
+    }
+    std::string name((const char *) data + offset + 4, name_length);
+    if (name == "Male" || name == "Female") {
+      continue;
+    }
+    uint32_t x = readUint32(data, offset - 20);
+    uint32_t y = readUint32(data, offset - 16);
+    if (x == 0 || y == 0 || x >= map_size * 64 || y >= map_size * 64) {
+      continue;
+    }
+    object.x = x;
+    object.y = y;
+    object.rotation = readUint32(data, offset - 8);
+    return true;
+  }
+  return false;
+}
+
 // Object records are three length-prefixed strings, a length field for the
 // rest of the record and that many bytes of data. The tile position in
 // 64ths sits at a fixed place inside that data.
@@ -267,14 +307,15 @@ void ZooFile::parseObjects() {
       SDL_Log("Object %u data does not fit, stopping", i);
       break;
     }
-    if (remaining >= 20) {
+    object.x = 0;
+    object.y = 0;
+    object.rotation = 0;
+    if (isEntityCategory(object.category)) {
+      findEntityPosition(data + position, remaining, this->width, object);
+    } else if (remaining >= 20) {
       object.x = readUint32(data, position + 4);
       object.y = readUint32(data, position + 8);
       object.rotation = readUint32(data, position + 16);
-    } else {
-      object.x = 0;
-      object.y = 0;
-      object.rotation = 0;
     }
     position += remaining;
     this->objects.push_back(object);
