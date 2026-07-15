@@ -838,8 +838,24 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         float right_y_high = a_left ? by_high : ay_high;
         float left_drop = (a_left ? ay_low - ay_high : by_low - by_high);
         float right_drop = (a_left ? by_low - by_high : ay_low - ay_high);
-        bool descends_left = left_y_high > right_y_high;
-        const char * side = descends_left ? "r" : "l";
+        // Which way the edge itself runs decides the art, and that is a
+        // question about the tile grid rather than about the terrain: ask
+        // the corners where they sit with no height on them. Reading it
+        // off the high edge instead let a flank that slopes a step tilt
+        // the edge from a half step per pixel to flat or to a whole one,
+        // which flips the comparison and picks the mirrored art.
+        float base_a_x;
+        float base_a_y;
+        float base_b_x;
+        float base_b_y;
+        this->tileToWorld((float) ((int) tile_x + corner_offsets[mine_a][0]),
+                          (float) ((int) tile_y + corner_offsets[mine_a][1]), &base_a_x, &base_a_y);
+        this->tileToWorld((float) ((int) tile_x + corner_offsets[mine_b][0]),
+                          (float) ((int) tile_y + corner_offsets[mine_b][1]), &base_b_x, &base_b_y);
+        float left_base_y = a_left ? base_a_y : base_b_y;
+        float right_base_y = a_left ? base_b_y : base_a_y;
+        // The "l" art descends to the right, the "r" art climbs
+        const char * side = right_base_y > left_base_y ? "l" : "r";
         float step_px = HEIGHT_STEP * this->zoom;
         int left_steps = (int) SDL_lroundf(left_drop / step_px);
         int right_steps = (int) SDL_lroundf(right_drop / step_px);
