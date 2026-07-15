@@ -158,3 +158,13 @@ TEST_CASE("exhibits and the entrance parse from the header") {
   CHECK(exhibit.total_upkeep == doctest::Approx(6.5f));
   delete zoo;
 }
+
+TEST_CASE("a loaded zoo serializes back byte identical") {
+  std::vector<uint8_t> file = syntheticZooWithExhibit();
+  ZooFile * zoo = ZooFile::loadFromMemory(file.data(), file.size());
+  REQUIRE(zoo != nullptr);
+  std::vector<uint8_t> written = zoo->serialize();
+  REQUIRE(written.size() == file.size());
+  CHECK(memcmp(written.data(), file.data(), file.size()) == 0);
+  delete zoo;
+}

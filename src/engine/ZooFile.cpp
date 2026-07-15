@@ -226,6 +226,8 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
     zoo->tiles.push_back(tile);
   }
 
+  zoo->header_raw.assign(data, data + terrain_start);
+
   size_t object_start = terrain_start + terrain_size;
   zoo->object_count = readUint32(data, object_start);
   zoo->object_section.assign(data + object_start, data + size);
@@ -320,6 +322,36 @@ void ZooFile::parseObjects() {
     position += remaining;
     this->objects.push_back(object);
   }
+}
+
+std::vector<uint8_t> ZooFile::serialize() const {
+  std::vector<uint8_t> data;
+  data.reserve(this->header_raw.size() + this->tiles.size() * 10 + this->object_section.size());
+  data.insert(data.end(), this->header_raw.begin(), this->header_raw.end());
+  for (const ZooTerrainTile &tile : this->tiles) {
+    uint32_t height = (uint32_t) tile.height;
+    data.push_back(height & 0xFF);
+    data.push_back((height >> 8) & 0xFF);
+    data.push_back((height >> 16) & 0xFF);
+    data.push_back((height >> 24) & 0xFF);
+    data.push_back(tile.shape);
+    data.push_back(tile.type);
+    data.insert(data.end(), tile.unknown, tile.unknown + 4);
+  }
+  data.insert(data.end(), this->object_section.begin(), this->object_section.end());
+  return data;
+}
+
+bool ZooFile::saveToFile(const std::string &path) const {
+  FILE * fd = fopen(path.c_str(), "wb");
+  if (fd == NULL) {
+    SDL_Log("Could not open %s for writing", path.c_str());
+    return false;
+  }
+  std::vector<uint8_t> data = this->serialize();
+  size_t written = fwrite(data.data(), 1, data.size(), fd);
+  fclose(fd);
+  return written == data.size();
 }
 
 ZooFile * ZooFile::loadFromFile(const std::string &path) {

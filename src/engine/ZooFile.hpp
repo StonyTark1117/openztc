@@ -60,6 +60,12 @@ public:
   static ZooFile * loadFromMemory(const void * data, size_t size);
   static ZooFile * loadFromFile(const std::string &path);
 
+  // Serializes the zoo back into the file format. A freshly loaded file
+  // writes back byte identical: the header is kept raw, the terrain is
+  // re-serialized from the tiles and the object section is preserved.
+  std::vector<uint8_t> serialize() const;
+  bool saveToFile(const std::string &path) const;
+
   uint32_t getWidth() const { return this->width; }
   uint32_t getHeight() const { return this->height; }
   char getVariant() const { return this->variant; }
@@ -88,6 +94,9 @@ private:
   std::vector<ZooTerrainTile> tiles;
   std::vector<ZooExhibit> exhibits;
   uint32_t object_count = 0;
+  // Everything before the terrain stream, kept raw for writing until all
+  // of it is understood
+  std::vector<uint8_t> header_raw;
   std::vector<uint8_t> object_section;
   std::vector<ZooObject> objects;
 

@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <vector>
 
 #include "../src/engine/ZooFile.hpp"
 
@@ -11,10 +12,15 @@ int main(int argc, char ** argv) {
     return 1;
   }
   bool list_objects = false;
+  bool roundtrip = false;
   int failures = 0;
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "--objects") == 0) {
       list_objects = true;
+      continue;
+    }
+    if (strcmp(argv[i], "--roundtrip") == 0) {
+      roundtrip = true;
       continue;
     }
     ZooFile * zoo = ZooFile::loadFromFile(argv[i]);
@@ -50,6 +56,22 @@ int main(int argc, char ** argv) {
              exhibit.name.c_str(), exhibit.x, exhibit.y, exhibit.entrance_x, exhibit.entrance_y,
              exhibit.entrance_rotation, exhibit.current_donations, exhibit.last_donations, exhibit.total_donations,
              exhibit.current_upkeep, exhibit.last_upkeep, exhibit.total_upkeep, exhibit.extension_type);
+    }
+    if (roundtrip) {
+      FILE * fd = fopen(argv[i], "rb");
+      fseek(fd, 0L, SEEK_END);
+      long original_size = ftell(fd);
+      fseek(fd, 0L, SEEK_SET);
+      std::vector<uint8_t> original((size_t) original_size);
+      size_t read_count = fread(original.data(), 1, (size_t) original_size, fd);
+      fclose(fd);
+      std::vector<uint8_t> written = zoo->serialize();
+      if (read_count == written.size() && memcmp(original.data(), written.data(), written.size()) == 0) {
+        printf("  roundtrip: byte identical\n");
+      } else {
+        printf("  roundtrip: MISMATCH (%zu vs %zu bytes)\n", read_count, written.size());
+        failures++;
+      }
     }
     if (list_objects) {
       for (const ZooObject &object : zoo->getObjects()) {
