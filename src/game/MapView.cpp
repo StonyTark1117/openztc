@@ -585,13 +585,6 @@ std::string MapView::objectArtPath(const ZooObject * object) {
   return result;
 }
 
-// Guests, animals and staff move around in the simulation, they are not
-// static scenery and get skipped until the simulation drives them
-static bool isEntityCategory(const std::string &category) {
-  return category == "animals" || category == "guests" || category == "keeper" ||
-         category == "maint" || category == "tour" || category == "helicopter";
-}
-
 // Art locations differ per category: plain objects have an idle animation
 // under objects/<code>, fences have one animation per direction and paths
 // have numbered shape pieces picked by which neighbors are also paths
@@ -629,10 +622,15 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     draw_key = std::to_string(5 + mask);
     animation_path = "paths/" + object->code + "/idle/idle";
     cache_key = animation_path;
-  } else if (object->category == "ambient") {
+  } else if (object->category == "ambient" || object->category == "helicopter") {
     // Ambient markers are sound emitters without art
     return nullptr;
-  } else if (isEntityCategory(object->category)) {
+  } else if (object->category == "animals" || object->category == "guests" ||
+             object->category == "keeper" || object->category == "maint" ||
+             object->category == "tour") {
+    // Entity records do not use the static object layout: their heads are
+    // stats and the positions sit at name-dependent offsets deeper in the
+    // record, still undecoded. Skipped until that is reverse engineered.
     return nullptr;
   } else {
     // Tank walls carry a piece code like fences do, plain objects face
