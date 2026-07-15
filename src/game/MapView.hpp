@@ -11,6 +11,7 @@
 #include "../engine/ResourceManager.hpp"
 #include "../engine/ZooFile.hpp"
 #include "../engine/Input.hpp"
+#include "Simulation.hpp"
 
 // Renders the terrain of a zoo map isometrically. The terrain textures and
 // their type numbers come from the terrain/tiletex*.cfg files in the game
@@ -30,6 +31,10 @@ public:
   uint32_t getMapWidth() { return this->zoo != nullptr ? this->zoo->getWidth() : 0; }
   uint32_t getMapHeight() { return this->zoo != nullptr ? this->zoo->getHeight() : 0; }
   const ZooFile * getZoo() { return this->zoo; }
+  // The path tiles as sorted keys for the simulation's world
+  std::vector<uint64_t> getPathTileKeys();
+  // The simulation's guests, drawn on top of the map
+  void setSimGuests(const std::vector<SimGuest> &guests) { this->sim_guests = guests; }
   // One RGBA color per tile for the minimap, terrain colored by the
   // miniclr sections with paths, foliage, fences and buildings over it
   std::vector<uint8_t> buildMinimapColors(IniReader * minimap_colors);
@@ -59,6 +64,7 @@ private:
   bool registry_loaded = false;
   // Tiles carrying a path, for neighbor based path piece selection
   std::unordered_map<uint64_t, bool> path_tiles;
+  std::vector<SimGuest> sim_guests;
   int missing_object_art = 0;
 
   // Camera offset in world pixels at zoom 1 and the zoom factor
@@ -81,6 +87,7 @@ private:
   void tileToWorld(float tile_x, float tile_y, float * world_x, float * world_y);
   std::string rotationDirection(uint32_t rotation);
   void sortObjects();
+  void drawSimGuests(SDL_Renderer * renderer, float center_x, float center_y);
   void loadObjectRegistry();
   std::string registryLookup(const std::string &section, const std::string &key);
   std::string objectArtPath(const ZooObject * object);

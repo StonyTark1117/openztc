@@ -1,5 +1,9 @@
 #include <doctest.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+
 #include "../src/game/Simulation.hpp"
 #include "../src/game/GameAction.hpp"
 
@@ -102,4 +106,44 @@ TEST_CASE("identical simulations with finances stay in sync") {
     b.tick();
   }
   CHECK(a.getChecksum() == b.getChecksum());
+}
+
+TEST_CASE("guests spawn near the entrance and stay on the paths") {
+  Simulation simulation(11, 1000);
+  // A small L shaped path around the entrance at (5, 5)
+  std::vector<uint64_t> path;
+  for (int i = 0; i < 6; i++) {
+    path.push_back(((uint64_t) (uint32_t) (5 + i) << 32) | 5u);
+  }
+  for (int i = 1; i < 4; i++) {
+    path.push_back(((uint64_t) 10u << 32) | (uint32_t) (5 + i));
+  }
+  std::sort(path.begin(), path.end());
+  simulation.setWorld(5, 5, path);
+
+  for (int i = 0; i < Simulation::TICKS_PER_SECOND * 120; i++) {
+    simulation.tick();
+  }
+  CHECK(simulation.getGuests().size() > 2);
+  for (const SimGuest &guest : simulation.getGuests()) {
+    uint64_t key = ((uint64_t) (uint32_t) (guest.x / 64) << 32) | (uint32_t) (guest.y / 64);
+    CHECK(std::binary_search(path.begin(), path.end(), key));
+  }
+}
+
+TEST_CASE("guest simulations stay deterministic") {
+  std::vector<uint64_t> path;
+  for (int i = 0; i < 10; i++) {
+    path.push_back(((uint64_t) (uint32_t) i << 32) | 3u);
+  }
+  Simulation a(21, 100);
+  Simulation b(21, 100);
+  a.setWorld(0, 3, path);
+  b.setWorld(0, 3, path);
+  for (int i = 0; i < 5000; i++) {
+    a.tick();
+    b.tick();
+  }
+  CHECK(a.getChecksum() == b.getChecksum());
+  CHECK(a.getGuests().size() == b.getGuests().size());
 }

@@ -13,6 +13,19 @@ typedef struct {
   int64_t monthly_upkeep_cents;
 } ExhibitFinance;
 
+// A guest walking the zoo. Positions are in 64ths of a tile, like the
+// save format uses, and stay integers for determinism.
+typedef struct {
+  int32_t x;
+  int32_t y;
+  int32_t target_x;
+  int32_t target_y;
+  int32_t previous_tile_x;
+  int32_t previous_tile_y;
+  uint8_t type;    // 0 man, 1 woman, 2 boy, 3 girl
+  uint8_t facing;  // 0-7 clockwise from SE
+} SimGuest;
+
 // The deterministic game simulation. It advances in fixed ticks, consumes
 // queued GameActions at tick boundaries and owns the only random number
 // generator game logic may use. Determinism rules for everything inside the
@@ -37,6 +50,11 @@ public:
   void tick();
   // The exhibits' monthly donations and upkeep, applied at month ticks
   void setExhibitFinances(const std::vector<ExhibitFinance> &finances);
+  // The walkable world: the entrance tile and the path tiles as sorted
+  // (x << 32 | y) keys. Guests spawn near the entrance and wander the
+  // paths once this is set.
+  void setWorld(int32_t entrance_tile_x, int32_t entrance_tile_y, std::vector<uint64_t> sorted_path_tiles);
+  const std::vector<SimGuest> & getGuests() { return this->guests; }
 
   uint64_t getTickCount();
   // Game date derived from the tick count, month 0-11 and year from 1
@@ -55,9 +73,16 @@ private:
   int64_t cash_cents = 0;
   std::vector<ExhibitFinance> exhibit_finances;
   std::vector<GameAction> action_queue;
+  std::vector<uint64_t> path_tiles;
+  std::vector<SimGuest> guests;
+  int32_t spawn_tile_x = -1;
+  int32_t spawn_tile_y = -1;
 
   void applyAction(const GameAction &action);
   void applyMonthlyFinances();
+  bool isPathTile(int32_t tile_x, int32_t tile_y);
+  void updateGuests();
+  void spawnGuest();
 };
 
 #endif // SIMULATION_HPP

@@ -146,6 +146,9 @@ bool GameManager::HandleInputs(std::vector<Input> &inputs) {
 
 void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   if (this->map_view != nullptr) {
+    if (this->simulation != nullptr) {
+      this->map_view->setSimGuests(this->simulation->getGuests());
+    }
     this->map_view->draw(renderer, window_rect);
     // The in game toolbar draws over the map. Only its date and money
     // displays are wired up so far.
@@ -570,6 +573,7 @@ void GameManager::startFreeformMap() {
     finances.push_back(finance);
   }
   this->simulation->setExhibitFinances(finances);
+  this->simulation->setWorld(view->getZoo()->getEntranceX(), view->getZoo()->getEntranceY(), view->getPathTileKeys());
   this->simulation_paused = true;
   this->shown_month = -1;
   this->shown_year = -1;
