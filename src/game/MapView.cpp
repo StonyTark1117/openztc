@@ -987,12 +987,16 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     // the edge sloping one step (fenceEdgeHeights reports that flank's
     // corner pair); hard cliffs with flat flanks stay flat even though
     // the anchor is fractional (verified on deathmtn's cliff base and
-    // the fencetest terraces).
+    // the fencetest terraces). The p/n labels of the art are relative to
+    // the drawn face: the SW and NW views ship them swapped (their tall
+    // and short frames trade places), so back facing pieces invert the
+    // rule — med_kids' stair gate stub was the giveaway.
     float edge_span = edge_end - edge_start;
+    bool inverted_key = draw_key == "SW" || draw_key == "NW";
     if (edge_span == 1.0f) {
-      state = y_run ? "idle30p" : "idle30n";
+      state = (y_run != inverted_key) ? "idle30p" : "idle30n";
     } else if (edge_span == -1.0f) {
-      state = y_run ? "idle30n" : "idle30p";
+      state = (y_run != inverted_key) ? "idle30n" : "idle30p";
     }
     if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
       SDL_Log("fence (%.2f, %.2f) %s edge %.1f -> %.1f state %s key %s",
