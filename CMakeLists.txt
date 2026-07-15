@@ -153,6 +153,22 @@ if (BUILD_TOOLS_ZOO)
         SDL3_ttf::SDL3_ttf-static
         SDL3_mixer::SDL3_mixer-static
         libzip::zip)
+
+    add_executable(anishot tools/anishot.cpp ${MAPSHOT_SRC})
+    target_include_directories(anishot PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/pe-resource-loader/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL_image/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL_ttf/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/SDL_mixer/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/libzip/include)
+    target_link_libraries(anishot PRIVATE
+        pe_resource_loader_static
+        SDL3::SDL3-static
+        SDL3_image::SDL3_image-static
+        SDL3_ttf::SDL3_ttf-static
+        SDL3_mixer::SDL3_mixer-static
+        libzip::zip)
 endif()
 
 option(BUILD_TESTS "Build the unit tests" OFF)

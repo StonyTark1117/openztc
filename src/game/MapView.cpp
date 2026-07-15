@@ -503,9 +503,13 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
 // The rotation field steps in increments of 2 per quarter turn. The ring is
 // in clockwise screen order, so rotating the map by a quarter turn shifts
 // which direction art a facing needs by one step.
+// The rotation value ring is one step ahead of the art direction it shows
+// in the original: rotation 6 draws the SW view at the default camera
+// (orientation 1), verified against the entrance arch, gate booths and
+// hedges of fshore.zoo. Each camera quarter turn moves one more step.
 std::string MapView::rotationDirection(uint32_t rotation) {
   const char * directions[4] = {"SE", "SW", "NW", "NE"};
-  return directions[((rotation / 2) + 4 - (uint32_t) this->orientation) % 4];
+  return directions[((rotation / 2) + 7 - (uint32_t) this->orientation) % 4];
 }
 
 void MapView::loadObjectRegistry() {
@@ -602,10 +606,9 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   std::string cache_key;
   std::string animation_path;
   if (object->category == "fences") {
-    // Fence pieces sit on tile edges at half tile positions and their
-    // rotation ring is one step behind the object one: 0 is the NE facing
-    // piece of an x axis run, 6 the SE facing piece of a y axis run
-    draw_key = rotationDirection(object->rotation + 6);
+    // Fence pieces sit on tile edges at half tile positions: 0 is the NE
+    // facing piece of an x axis run, 6 the SE facing piece of a y axis run
+    draw_key = rotationDirection(object->rotation);
     animation_path = "fences/" + object->subcategory + "/" + object->code + "/idle/idle";
     cache_key = animation_path;
   } else if (object->category == "paths") {
@@ -673,11 +676,7 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   } else {
     // Tank walls carry a piece code like fences do, plain objects face
     // where their rotation points
-    if (object->category == "tankwall") {
-      draw_key = rotationDirection(object->rotation + 6);
-    } else {
-      draw_key = rotationDirection(object->rotation);
-    }
+    draw_key = rotationDirection(object->rotation);
     // The usual layout is an idle animation under objects/<code>. The cfg
     // registry locates the art that deviates from it, like tank pieces and
     // effects with redirected animations, but its icon derived locations
