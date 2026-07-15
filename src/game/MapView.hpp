@@ -29,6 +29,7 @@ public:
 
   uint32_t getMapWidth() { return this->zoo != nullptr ? this->zoo->getWidth() : 0; }
   uint32_t getMapHeight() { return this->zoo != nullptr ? this->zoo->getHeight() : 0; }
+  const ZooFile * getZoo() { return this->zoo; }
   // One RGBA color per tile for the minimap, terrain colored by the
   // miniclr sections with paths, foliage, fences and buildings over it
   std::vector<uint8_t> buildMinimapColors(IniReader * minimap_colors);

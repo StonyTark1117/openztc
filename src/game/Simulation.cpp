@@ -3,7 +3,18 @@
 Simulation::Simulation(uint32_t seed, int64_t starting_cash) {
   // xorshift must not start at zero
   this->rng_state = seed == 0 ? 1 : seed;
-  this->cash = starting_cash;
+  this->cash_cents = starting_cash * 100;
+}
+
+void Simulation::setExhibitFinances(const std::vector<ExhibitFinance> &finances) {
+  this->exhibit_finances = finances;
+}
+
+void Simulation::applyMonthlyFinances() {
+  for (const ExhibitFinance &finance : this->exhibit_finances) {
+    this->cash_cents += finance.monthly_donations_cents;
+    this->cash_cents -= finance.monthly_upkeep_cents;
+  }
 }
 
 void Simulation::queueAction(const GameAction &action) {
@@ -16,8 +27,11 @@ void Simulation::tick() {
   }
   this->action_queue.clear();
 
-  // Game state updates will happen here once there is game state
   this->tick_count++;
+  // Money moves at every month boundary
+  if (this->tick_count % TICKS_PER_MONTH == 0) {
+    this->applyMonthlyFinances();
+  }
 }
 
 void Simulation::applyAction(const GameAction &action) {
@@ -42,11 +56,11 @@ int Simulation::getYear() {
 }
 
 int64_t Simulation::getCash() {
-  return this->cash;
+  return this->cash_cents / 100;
 }
 
 uint32_t Simulation::getChecksum() {
-  return (uint32_t) this->tick_count ^ this->rng_state ^ (uint32_t) this->cash;
+  return (uint32_t) this->tick_count ^ this->rng_state ^ (uint32_t) this->cash_cents;
 }
 
 uint32_t Simulation::random(uint32_t bound) {

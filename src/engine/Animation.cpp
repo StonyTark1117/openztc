@@ -98,7 +98,17 @@ void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const 
   if (this->textures[key].empty() || this->textures[key][0] == nullptr) {
     return;
   }
-  SDL_RenderTexture(renderer, this->textures[key][0], NULL, dest_rect);
+  // Cycle the frames by time so map sprites animate. The background frame
+  // of FATZ animations sits at the end and is not part of the cycle.
+  size_t frame_count = this->textures[key].size() - (size_t) (this->has_background ? 1 : 0);
+  size_t frame = 0;
+  if (this->frame_time_in_ms > 0 && frame_count > 1) {
+    frame = (SDL_GetTicks() / this->frame_time_in_ms) % frame_count;
+  }
+  if (this->textures[key][frame] == nullptr) {
+    frame = 0;
+  }
+  SDL_RenderTexture(renderer, this->textures[key][frame], NULL, dest_rect);
 }
 
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {

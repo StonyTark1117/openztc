@@ -558,6 +558,18 @@ void GameManager::startFreeformMap() {
   // A fresh game starts in January of year one with the chosen cash and,
   // like the original, paused
   this->simulation = new Simulation(1, this->starting_cash);
+  // Until guests generate donations, the exhibits' saved monthly numbers
+  // drive the money flow
+  std::vector<ExhibitFinance> finances;
+  for (const ZooExhibit &exhibit : view->getZoo()->getExhibits()) {
+    ExhibitFinance finance;
+    float donations = exhibit.last_donations > 0.0f ? exhibit.last_donations : exhibit.current_donations;
+    float upkeep = exhibit.last_upkeep > 0.0f ? exhibit.last_upkeep : exhibit.current_upkeep;
+    finance.monthly_donations_cents = (int64_t) (donations * 100.0f);
+    finance.monthly_upkeep_cents = (int64_t) (upkeep * 100.0f);
+    finances.push_back(finance);
+  }
+  this->simulation->setExhibitFinances(finances);
   this->simulation_paused = true;
   this->shown_month = -1;
   this->shown_year = -1;

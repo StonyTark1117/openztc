@@ -75,3 +75,31 @@ TEST_CASE("the date advances monthly from January of year one") {
   CHECK(simulation.getMonth() == 0);
   CHECK(simulation.getYear() == 2);
 }
+
+TEST_CASE("exhibit finances move the cash at month boundaries") {
+  Simulation simulation(3, 1000);
+  simulation.setExhibitFinances({{15050, 20000}, {0, 10025}});
+  for (int i = 0; i < Simulation::TICKS_PER_MONTH - 1; i++) {
+    simulation.tick();
+  }
+  CHECK(simulation.getCash() == 1000);
+  simulation.tick();
+  // 1000.00 + 150.50 - 200.00 - 100.25 = 850.25, displayed as whole dollars
+  CHECK(simulation.getCash() == 850);
+  for (int i = 0; i < Simulation::TICKS_PER_MONTH; i++) {
+    simulation.tick();
+  }
+  CHECK(simulation.getCash() == 700);
+}
+
+TEST_CASE("identical simulations with finances stay in sync") {
+  Simulation a(9, 500);
+  Simulation b(9, 500);
+  a.setExhibitFinances({{100, 250}});
+  b.setExhibitFinances({{100, 250}});
+  for (int i = 0; i < Simulation::TICKS_PER_MONTH * 2; i++) {
+    a.tick();
+    b.tick();
+  }
+  CHECK(a.getChecksum() == b.getChecksum());
+}
