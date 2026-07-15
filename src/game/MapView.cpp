@@ -722,14 +722,12 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     }
     // Anchor the sprite by the box its ani file declares around the world
     // anchor point, falling back to bottom center for art without one.
-    // Fence pieces still use the fallback until per frame offsets are
-    // implemented, their boxes leave gaps between the pieces.
+    // The frames sit inside that box by their own offsets.
     float box_x0 = 0.0f;
     float box_y0 = 0.0f;
     float sprite_width = 0.0f;
     float sprite_height = 0.0f;
-    if (object->category == "fences" ||
-        !animation->getBox(&box_x0, &box_y0, &sprite_width, &sprite_height)) {
+    if (!animation->getBox(&box_x0, &box_y0, &sprite_width, &sprite_height)) {
       if (!draw_key.empty()) {
         if (!animation->getSizeByKey(draw_key, &sprite_width, &sprite_height)) {
           continue;

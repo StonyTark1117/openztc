@@ -24,6 +24,8 @@ Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::str
     }
     data->width = width;
     data->height = height;
+    data->origin_x = (int16_t) -ini_reader->getInt("animation", "x0");
+    data->origin_y = (int16_t) -ini_reader->getInt("animation", "y0");
     (*animations)[direction] = data;
   }
 

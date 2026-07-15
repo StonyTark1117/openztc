@@ -410,40 +410,6 @@ std::string Animation::convertCompassDirectionToExistingAnimationString(CompassD
   return direction_string;
 }
 
-static void calculateOffset(AnimationData * data, int16_t * offset_x, int16_t * offset_y) {
-  if (data->has_background) {
-    *offset_x = (data->width / 2) - (data->frames[data->frame_count].width / 2) + data->frames[data->frame_count].offset_x;
-    *offset_y = (data->height / 2) - (data->frames[data->frame_count].height / 2) + data->frames[data->frame_count].offset_y;
-    return;
-  }
-
-  for(int i = 0; i < ((int) data->frame_count + (int) data->has_background); i++) {
-    int16_t current_frame_offset_x = (data->width / 2) - (data->frames[i].width / 2) + data->frames[i].offset_x;
-    int16_t current_frame_offset_y = (data->height / 2) - (data->frames[i].height / 2) + data->frames[i].offset_y;
-
-    bool all_frames_fit = true;
-    for(int j = 0; j < ((int) data->frame_count + (int) data->has_background); j++) {
-      if (i == j) {
-        continue;
-      }
-      if (
-        current_frame_offset_x - data->frames[j].offset_x < 0 ||
-        data->frames[j].width + current_frame_offset_x - data->frames[j].offset_x > data->width ||
-        current_frame_offset_y - data->frames[j].offset_y < 0 ||
-        data->frames[j].height + current_frame_offset_y - data->frames[j].offset_y > data->height
-      ) {
-        all_frames_fit = false;
-        break;
-      }
-    }
-    if (all_frames_fit) {
-      *offset_x = current_frame_offset_x;
-      *offset_y = current_frame_offset_y;
-      return;
-    }
-  }
-  SDL_Log("Failed to set offset to use");
-}
 
 
 void Animation::loadSurfaces(std::string direction_string, AnimationData * data) {
@@ -462,10 +428,9 @@ void Animation::loadSurfaces(std::string direction_string, AnimationData * data)
   assert(data->width > 0);
   assert(data->height > 0);
 
-  // TODO: Determine offset
-  int16_t offset_x = 0;
-  int16_t offset_y = 0;
-  calculateOffset(data, &offset_x, &offset_y);
+  // Frames sit relative to the anchor point of the sprite box
+  int16_t offset_x = data->origin_x;
+  int16_t offset_y = data->origin_y;
 
   this->surfaces[direction_string] = std::vector<SDL_Surface *>();
   for(int i = 0; i < ((int) data->frame_count + (int) data->has_background); i++) {

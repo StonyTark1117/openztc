@@ -30,6 +30,10 @@ typedef struct {
 typedef struct {
     uint16_t width;
     uint16_t height;
+    // Position of the anchor point inside the sprite box, from the ani
+    // ini's box (-x0, -y0). Frame offsets are relative to this anchor.
+    int16_t origin_x;
+    int16_t origin_y;
     uint8_t has_background;
     uint32_t frame_time_in_ms;
     Pallet * pallet;
