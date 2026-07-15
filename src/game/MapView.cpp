@@ -250,6 +250,7 @@ std::vector<uint64_t> MapView::getPathTileKeys() {
 void MapView::sortObjects() {
   struct SortKey {
     int row;
+    int column;
     int phase;
     float depth;
   };
@@ -289,20 +290,31 @@ void MapView::sortObjects() {
       float depth_b;
       this->tileToWorld(ax, ay, &world_x, &depth_a);
       this->tileToWorld(bx, by, &world_x, &depth_b);
-      key.row = (int) SDL_lroundf(SDL_min(depth_a, depth_b) / TILE_HALF_HEIGHT);
-      // Before the row's objects: the original lets scenery in the same
-      // row overhang a fence (a tree crown droops over the wall in front
-      // of it), while anything in the fence's front tile is a row later
-      // and covers it either way
-      key.phase = 0;
+      // The piece belongs to the further-back flanking tile and draws
+      // right after that tile's own objects: the original hides a rock in
+      // the tile behind a wall, yet a tree in the diagonal neighbor of the
+      // same row still droops its crown over the wall (it draws with its
+      // own, later tile)
+      float back_x;
+      float back_depth;
+      if (depth_a <= depth_b) {
+        this->tileToWorld(ax, ay, &back_x, &back_depth);
+      } else {
+        this->tileToWorld(bx, by, &back_x, &back_depth);
+      }
+      key.row = (int) SDL_lroundf(back_depth / TILE_HALF_HEIGHT);
+      key.column = (int) SDL_lroundf(back_x / TILE_HALF_WIDTH);
+      key.phase = 1;
     } else {
       // The object's whole tile decides its row
       float center_x = (float) (int) tile_x + 0.5f;
       float center_y = (float) (int) tile_y + 0.5f;
+      float center_world_x;
       float center_depth;
-      this->tileToWorld(center_x, center_y, &world_x, &center_depth);
+      this->tileToWorld(center_x, center_y, &center_world_x, &center_depth);
       key.row = (int) SDL_lroundf(center_depth / TILE_HALF_HEIGHT);
-      key.phase = 1;
+      key.column = (int) SDL_lroundf(center_world_x / TILE_HALF_WIDTH);
+      key.phase = 0;
     }
     keys[object] = key;
   }
@@ -312,6 +324,9 @@ void MapView::sortObjects() {
               const SortKey &kb = keys[b];
               if (ka.row != kb.row) {
                 return ka.row < kb.row;
+              }
+              if (ka.column != kb.column) {
+                return ka.column < kb.column;
               }
               if (ka.phase != kb.phase) {
                 return ka.phase < kb.phase;
@@ -966,14 +981,15 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     float edge_end = 0.0f;
     bool y_run = false;
     this->fenceEdgeHeights(object, &edge_start, &edge_end, &y_run);
-    // The 30 degree art spans one height step; edges dropping further
-    // still use it, crowning the top step so the coping line stays one
-    // continuous diagonal, with the wall face stacked downward when
-    // drawn, like the original's terrace walls
+    // The 30 degree art spans one height step. Edges dropping further
+    // render as a flat piece sitting at the LOW end (traced from the
+    // original's coping line on deathmtn's 3->1 drop): the coping jumps
+    // down at the piece boundary and the neighboring high piece's end
+    // covers the join.
     float edge_span = edge_end - edge_start;
-    if (edge_span >= 1.0f) {
+    if (edge_span == 1.0f) {
       state = y_run ? "idle30p" : "idle30n";
-    } else if (edge_span <= -1.0f) {
+    } else if (edge_span == -1.0f) {
       state = y_run ? "idle30n" : "idle30p";
     }
     if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
@@ -1137,15 +1153,22 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     // Positions are in 64ths of a tile
     float tile_x = (float) object->x / 64.0f;
     float tile_y = (float) object->y / 64.0f;
+    if (object->category == "fences" || object->category == "tankwall") {
+      // Fence positions sit just off the edge midpoint (63/64 fractions
+      // encode the facing side); anchor at the exact half tile point so
+      // neighboring pieces land on the same pixel grid
+      tile_x = SDL_roundf(tile_x * 2.0f) / 2.0f;
+      tile_y = SDL_roundf(tile_y * 2.0f) / 2.0f;
+    }
     float world_x;
     float world_y;
     this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
     // Anchor the sprite at the interpolated terrain height under it so
     // objects follow slopes. A fence piece anchors at its edge's midpoint
-    // (verified pixel aligned against the original on fshore.zoo); where
-    // the edge drops more than the one step its slope art can span it
-    // anchors as if the edge were the top step alone, and the face fills
-    // down to the ground when drawn.
+    // (verified pixel aligned against the original on fshore.zoo); an
+    // edge dropping more than the one step the slope art can span sits
+    // flat at the low end, like the original (traced on deathmtn). The
+    // face still fills down to the ground where that sits lower.
     int fence_face_fill = 0;
     if (object->category == "fences" || object->category == "tankwall") {
       float edge_start = 0.0f;
@@ -1154,7 +1177,7 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
       this->fenceEdgeHeights(object, &edge_start, &edge_end, nullptr, &edge_ground);
       float anchor;
       if (SDL_fabsf(edge_end - edge_start) >= 2.0f) {
-        anchor = SDL_max(edge_start, edge_end) - 0.5f;
+        anchor = SDL_min(edge_start, edge_end);
       } else {
         anchor = (edge_start + edge_end) * 0.5f;
       }
@@ -1171,6 +1194,10 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     if (screen_x < -200.0f || screen_x > window_rect->w + 200.0f ||
         screen_y < -200.0f || screen_y > window_rect->h + 200.0f) {
       continue;
+    }
+    if (SDL_getenv("OPENZTC_DEBUG_ANCHOR") != nullptr && object->category == "objects") {
+      SDL_Log("anchor %s/%s (%.2f, %.2f) h %.2f screen (%.1f, %.1f)", object->subcategory.c_str(),
+              object->code.c_str(), tile_x, tile_y, this->heightAt(tile_x, tile_y), screen_x, screen_y);
     }
     std::string draw_key;
     Animation * animation = this->objectAnimation(object, draw_key);
