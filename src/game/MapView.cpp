@@ -644,6 +644,10 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     if (object->x == 0 && object->y == 0) {
       return nullptr;
     }
+    if (object->category == "animals" && !this->sim_animals.empty()) {
+      // The simulation drives the animals from these records
+      return nullptr;
+    }
     if (object->category == "animals") {
       animation_path = "animals/" + object->subcategory + "/" + object->code + "/stand/stand";
     } else if (object->category == "guests") {
@@ -785,63 +789,75 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
   this->drawSimGuests(renderer, center_x, center_y);
 }
 
-// The simulation's guests draw after the static objects. They can clip
+// One simulation entity, anchored like the static objects are
+void MapView::drawSimEntity(SDL_Renderer * renderer, float center_x, float center_y,
+                            const std::string &animation_path, int32_t x, int32_t y, uint8_t facing) {
+  static const char * entity_directions[8] = {"SE", "S", "SW", "W", "NW", "N", "NE", "E"};
+  Animation * animation = nullptr;
+  if (this->object_animations.contains(animation_path)) {
+    animation = this->object_animations[animation_path];
+  } else {
+    animation = this->resource_manager->getAnimation(animation_path);
+    this->object_animations[animation_path] = animation;
+  }
+  if (animation == nullptr) {
+    return;
+  }
+  float tile_x = (float) x / 64.0f;
+  float tile_y = (float) y / 64.0f;
+  float world_x;
+  float world_y;
+  this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
+  uint32_t corner_x = (uint32_t) tile_x;
+  uint32_t corner_y = (uint32_t) tile_y;
+  if (corner_x <= this->zoo->getWidth() && corner_y <= this->zoo->getHeight()) {
+    world_y -= this->cornerHeight(corner_x, corner_y) * HEIGHT_STEP;
+  }
+  float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
+  float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
+  std::string draw_key = entity_directions[(facing + 8 - 2 * (uint32_t) this->orientation) % 8];
+  float box_x0 = 0.0f;
+  float box_y0 = 0.0f;
+  float sprite_width = 0.0f;
+  float sprite_height = 0.0f;
+  if (!animation->getBox(&box_x0, &box_y0, &sprite_width, &sprite_height)) {
+    if (!animation->getSize(&sprite_width, &sprite_height)) {
+      return;
+    }
+    box_x0 = -sprite_width / 2.0f;
+    box_y0 = -sprite_height;
+  }
+  float key_width = 0.0f;
+  float key_height = 0.0f;
+  if (!animation->getSizeByKey(draw_key, &key_width, &key_height)) {
+    draw_key.clear();
+  }
+  SDL_FRect destination = {
+    screen_x + box_x0 * this->zoom,
+    screen_y + box_y0 * this->zoom,
+    sprite_width * this->zoom,
+    sprite_height * this->zoom,
+  };
+  if (!draw_key.empty()) {
+    animation->drawByKey(renderer, &destination, draw_key);
+  } else {
+    animation->draw(renderer, &destination);
+  }
+}
+
+// The simulation's entities draw after the static objects. They can clip
 // behind foreground scenery until they join the painter order properly.
 void MapView::drawSimGuests(SDL_Renderer * renderer, float center_x, float center_y) {
   static const char * guest_bodies[4] = {"lsmguest", "lsfguest", "lsbguest", "lsgguest"};
-  static const char * guest_directions[8] = {"SE", "S", "SW", "W", "NW", "N", "NE", "E"};
   for (const SimGuest &guest : this->sim_guests) {
     std::string body = guest_bodies[guest.type % 4];
-    std::string animation_path = "guests/" + body + "/" + body;
-    Animation * animation = nullptr;
-    if (this->object_animations.contains(animation_path)) {
-      animation = this->object_animations[animation_path];
-    } else {
-      animation = this->resource_manager->getAnimation(animation_path);
-      this->object_animations[animation_path] = animation;
-    }
-    if (animation == nullptr) {
-      continue;
-    }
-    float tile_x = (float) guest.x / 64.0f;
-    float tile_y = (float) guest.y / 64.0f;
-    float world_x;
-    float world_y;
-    this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
-    uint32_t corner_x = (uint32_t) tile_x;
-    uint32_t corner_y = (uint32_t) tile_y;
-    if (corner_x <= this->zoo->getWidth() && corner_y <= this->zoo->getHeight()) {
-      world_y -= this->cornerHeight(corner_x, corner_y) * HEIGHT_STEP;
-    }
-    float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
-    float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
-    std::string draw_key = guest_directions[(guest.facing + 8 - 2 * (uint32_t) this->orientation) % 8];
-    float box_x0 = 0.0f;
-    float box_y0 = 0.0f;
-    float sprite_width = 0.0f;
-    float sprite_height = 0.0f;
-    if (!animation->getBox(&box_x0, &box_y0, &sprite_width, &sprite_height)) {
-      if (!animation->getSize(&sprite_width, &sprite_height)) {
-        continue;
-      }
-      box_x0 = -sprite_width / 2.0f;
-      box_y0 = -sprite_height;
-    }
-    float key_width = 0.0f;
-    float key_height = 0.0f;
-    if (!animation->getSizeByKey(draw_key, &key_width, &key_height)) {
-      draw_key.clear();
-    }
-    SDL_FRect destination = {
-      screen_x + box_x0 * this->zoom,
-      screen_y + box_y0 * this->zoom,
-      sprite_width * this->zoom,
-      sprite_height * this->zoom,
-    };
-    if (!draw_key.empty()) {
-      animation->drawByKey(renderer, &destination, draw_key);
-    } else {
-      animation->draw(renderer, &destination);
-    }
+    this->drawSimEntity(renderer, center_x, center_y, "guests/" + body + "/" + body, guest.x, guest.y, guest.facing);
+  }
+  for (const SimAnimal &animal : this->sim_animals) {
+    // Walking animals use their walk art, resting ones stand
+    const char * behavior = (animal.x == animal.target_x && animal.y == animal.target_y) ? "stand" : "walk";
+    this->drawSimEntity(renderer, center_x, center_y,
+                        "animals/" + animal.species + "/" + animal.sex + "/" + behavior + "/" + behavior,
+                        animal.x, animal.y, animal.facing);
   }
 }

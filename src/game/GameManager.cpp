@@ -148,6 +148,7 @@ void GameManager::Draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   if (this->map_view != nullptr) {
     if (this->simulation != nullptr) {
       this->map_view->setSimGuests(this->simulation->getGuests());
+      this->map_view->setSimAnimals(this->simulation->getAnimals());
     }
     this->map_view->draw(renderer, window_rect);
     // The in game toolbar draws over the map. Only its date and money
@@ -574,6 +575,40 @@ void GameManager::startFreeformMap() {
   }
   this->simulation->setExhibitFinances(finances);
   this->simulation->setWorld(view->getZoo()->getEntranceX(), view->getZoo()->getEntranceY(), view->getPathTileKeys());
+  // The animals come from the map records and the fences pen them in by
+  // blocking tile edges
+  std::vector<SimAnimal> animals;
+  std::vector<uint64_t> blocked_edges;
+  for (const ZooObject &object : view->getZoo()->getObjects()) {
+    if (object.category == "animals" && (object.x != 0 || object.y != 0)) {
+      SimAnimal animal;
+      animal.x = (int32_t) object.x;
+      animal.y = (int32_t) object.y;
+      animal.target_x = animal.x;
+      animal.target_y = animal.y;
+      animal.wait_ticks = 0;
+      animal.facing = (uint8_t) (object.rotation % 8);
+      animal.species = object.subcategory;
+      animal.sex = object.code;
+      animals.push_back(animal);
+    } else if (object.category == "fences" || object.category == "tankwall") {
+      // Pieces sit on edge midpoints: a half tile x means the piece
+      // blocks a step in y, and the other way around
+      int32_t tile_x = (int32_t) (object.x / 64);
+      int32_t tile_y = (int32_t) (object.y / 64);
+      uint32_t fraction_x = object.x % 64;
+      if (fraction_x >= 16 && fraction_x < 48) {
+        int32_t edge_y = (int32_t) ((object.y + 32) / 64);
+        blocked_edges.push_back(Simulation::makeEdgeKey(tile_x, edge_y - 1, 1));
+      } else {
+        int32_t edge_x = (int32_t) ((object.x + 32) / 64);
+        blocked_edges.push_back(Simulation::makeEdgeKey(edge_x - 1, tile_y, 0));
+      }
+    }
+  }
+  std::sort(blocked_edges.begin(), blocked_edges.end());
+  this->simulation->setBlockedEdges(blocked_edges);
+  this->simulation->setAnimals(animals);
   this->simulation_paused = true;
   this->shown_month = -1;
   this->shown_year = -1;

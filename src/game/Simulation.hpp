@@ -2,6 +2,7 @@
 #define SIMULATION_HPP
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "GameAction.hpp"
@@ -25,6 +26,19 @@ typedef struct {
   uint8_t type;    // 0 man, 1 woman, 2 boy, 3 girl
   uint8_t facing;  // 0-7 clockwise from SE
 } SimGuest;
+
+// An animal wandering its pen. Fences block the tile edges, which is what
+// keeps it inside, matching how the pens physically work.
+typedef struct {
+  int32_t x;
+  int32_t y;
+  int32_t target_x;
+  int32_t target_y;
+  int32_t wait_ticks;
+  uint8_t facing;
+  std::string species;  // the record's subcategory, like lion
+  std::string sex;      // m, f or y
+} SimAnimal;
 
 // The deterministic game simulation. It advances in fixed ticks, consumes
 // queued GameActions at tick boundaries and owns the only random number
@@ -55,6 +69,16 @@ public:
   // paths once this is set.
   void setWorld(int32_t entrance_tile_x, int32_t entrance_tile_y, std::vector<uint64_t> sorted_path_tiles);
   const std::vector<SimGuest> & getGuests() { return this->guests; }
+  // The animals to simulate and the tile edges fences block. Edge keys are
+  // makeEdgeKey of the lower tile and the step direction.
+  void setAnimals(const std::vector<SimAnimal> &animals);
+  void setBlockedEdges(std::vector<uint64_t> sorted_edges);
+  const std::vector<SimAnimal> & getAnimals() { return this->animals; }
+  // Key for the edge leaving (tile_x, tile_y) toward +x (direction 0) or
+  // +y (direction 1)
+  static uint64_t makeEdgeKey(int32_t tile_x, int32_t tile_y, int direction) {
+    return ((uint64_t) (uint32_t) tile_x << 33) | ((uint64_t) (uint32_t) tile_y << 1) | (uint64_t) direction;
+  }
 
   uint64_t getTickCount();
   // Game date derived from the tick count, month 0-11 and year from 1
@@ -75,13 +99,17 @@ private:
   std::vector<GameAction> action_queue;
   std::vector<uint64_t> path_tiles;
   std::vector<SimGuest> guests;
+  std::vector<SimAnimal> animals;
+  std::vector<uint64_t> blocked_edges;
   int32_t spawn_tile_x = -1;
   int32_t spawn_tile_y = -1;
 
   void applyAction(const GameAction &action);
   void applyMonthlyFinances();
   bool isPathTile(int32_t tile_x, int32_t tile_y);
+  bool isEdgeBlocked(int32_t tile_x, int32_t tile_y, int32_t next_x, int32_t next_y);
   void updateGuests();
+  void updateAnimals();
   void spawnGuest();
 };
 

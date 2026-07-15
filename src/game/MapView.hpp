@@ -33,8 +33,10 @@ public:
   const ZooFile * getZoo() { return this->zoo; }
   // The path tiles as sorted keys for the simulation's world
   std::vector<uint64_t> getPathTileKeys();
-  // The simulation's guests, drawn on top of the map
+  // The simulation's guests and animals, drawn on top of the map. While
+  // the simulation drives the animals their static records stay hidden.
   void setSimGuests(const std::vector<SimGuest> &guests) { this->sim_guests = guests; }
+  void setSimAnimals(const std::vector<SimAnimal> &animals) { this->sim_animals = animals; }
   // One RGBA color per tile for the minimap, terrain colored by the
   // miniclr sections with paths, foliage, fences and buildings over it
   std::vector<uint8_t> buildMinimapColors(IniReader * minimap_colors);
@@ -65,6 +67,7 @@ private:
   // Tiles carrying a path, for neighbor based path piece selection
   std::unordered_map<uint64_t, bool> path_tiles;
   std::vector<SimGuest> sim_guests;
+  std::vector<SimAnimal> sim_animals;
   int missing_object_art = 0;
 
   // Camera offset in world pixels at zoom 1 and the zoom factor
@@ -88,6 +91,8 @@ private:
   std::string rotationDirection(uint32_t rotation);
   void sortObjects();
   void drawSimGuests(SDL_Renderer * renderer, float center_x, float center_y);
+  void drawSimEntity(SDL_Renderer * renderer, float center_x, float center_y,
+                     const std::string &animation_path, int32_t x, int32_t y, uint8_t facing);
   void loadObjectRegistry();
   std::string registryLookup(const std::string &section, const std::string &key);
   std::string objectArtPath(const ZooObject * object);

@@ -147,3 +147,41 @@ TEST_CASE("guest simulations stay deterministic") {
   CHECK(a.getChecksum() == b.getChecksum());
   CHECK(a.getGuests().size() == b.getGuests().size());
 }
+
+TEST_CASE("animals wander but fences keep them penned") {
+  Simulation simulation(31, 100);
+  // A 2x2 pen from (10,10) to (11,11), fenced on every outer edge
+  std::vector<uint64_t> edges;
+  for (int i = 10; i <= 11; i++) {
+    edges.push_back(Simulation::makeEdgeKey(9, i, 0));    // west side
+    edges.push_back(Simulation::makeEdgeKey(11, i, 0));   // east side
+    edges.push_back(Simulation::makeEdgeKey(i, 9, 1));    // north side
+    edges.push_back(Simulation::makeEdgeKey(i, 11, 1));   // south side
+  }
+  std::sort(edges.begin(), edges.end());
+  simulation.setBlockedEdges(edges);
+  SimAnimal lion;
+  lion.x = 10 * 64 + 32;
+  lion.y = 10 * 64 + 32;
+  lion.target_x = lion.x;
+  lion.target_y = lion.y;
+  lion.wait_ticks = 0;
+  lion.facing = 0;
+  lion.species = "lion";
+  lion.sex = "m";
+  simulation.setAnimals({lion});
+
+  bool moved = false;
+  for (int i = 0; i < 10000; i++) {
+    simulation.tick();
+    const SimAnimal &animal = simulation.getAnimals()[0];
+    if (animal.x != 10 * 64 + 32 || animal.y != 10 * 64 + 32) {
+      moved = true;
+    }
+    CHECK(animal.x >= 10 * 64);
+    CHECK(animal.x < 12 * 64);
+    CHECK(animal.y >= 10 * 64);
+    CHECK(animal.y < 12 * 64);
+  }
+  CHECK(moved);
+}

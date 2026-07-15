@@ -32,6 +32,7 @@ void Simulation::tick() {
   this->action_queue.clear();
 
   this->updateGuests();
+  this->updateAnimals();
 
   this->tick_count++;
   // Money moves at every month boundary
@@ -70,6 +71,10 @@ uint32_t Simulation::getChecksum() {
   for (const SimGuest &guest : this->guests) {
     checksum = checksum * 31 + (uint32_t) guest.x;
     checksum = checksum * 31 + (uint32_t) guest.y;
+  }
+  for (const SimAnimal &animal : this->animals) {
+    checksum = checksum * 31 + (uint32_t) animal.x;
+    checksum = checksum * 31 + (uint32_t) animal.y;
   }
   return checksum;
 }
@@ -187,5 +192,78 @@ void Simulation::updateGuests() {
   if (this->spawn_tile_x >= 0 && this->guests.size() < GUEST_LIMIT &&
       this->tick_count % GUEST_SPAWN_INTERVAL_TICKS == 0) {
     this->spawnGuest();
+  }
+}
+
+void Simulation::setAnimals(const std::vector<SimAnimal> &animals) {
+  this->animals = animals;
+}
+
+void Simulation::setBlockedEdges(std::vector<uint64_t> sorted_edges) {
+  this->blocked_edges = sorted_edges;
+}
+
+bool Simulation::isEdgeBlocked(int32_t tile_x, int32_t tile_y, int32_t next_x, int32_t next_y) {
+  uint64_t key;
+  if (next_x > tile_x) {
+    key = makeEdgeKey(tile_x, tile_y, 0);
+  } else if (next_x < tile_x) {
+    key = makeEdgeKey(next_x, next_y, 0);
+  } else if (next_y > tile_y) {
+    key = makeEdgeKey(tile_x, tile_y, 1);
+  } else {
+    key = makeEdgeKey(next_x, next_y, 1);
+  }
+  return std::binary_search(this->blocked_edges.begin(), this->blocked_edges.end(), key);
+}
+
+// Animals amble slower than guests and rest between moves
+#define ANIMAL_SPEED_PER_TICK 1
+
+void Simulation::updateAnimals() {
+  for (SimAnimal &animal : this->animals) {
+    if (animal.wait_ticks > 0) {
+      animal.wait_ticks--;
+      continue;
+    }
+    if (animal.x == animal.target_x && animal.y == animal.target_y) {
+      // Rest a bit, then amble to a neighbor tile no fence blocks
+      animal.wait_ticks = (int32_t) this->random(160) + 40;
+      int32_t tile_x = animal.x / 64;
+      int32_t tile_y = animal.y / 64;
+      const int32_t neighbors[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
+      int32_t options[4][2];
+      int option_count = 0;
+      for (int i = 0; i < 4; i++) {
+        int32_t next_x = tile_x + neighbors[i][0];
+        int32_t next_y = tile_y + neighbors[i][1];
+        if (next_x < 0 || next_y < 0 || this->isEdgeBlocked(tile_x, tile_y, next_x, next_y)) {
+          continue;
+        }
+        options[option_count][0] = next_x;
+        options[option_count][1] = next_y;
+        option_count++;
+      }
+      if (option_count == 0) {
+        continue;
+      }
+      int choice = (int) this->random((uint32_t) option_count);
+      animal.target_x = options[choice][0] * 64 + 32;
+      animal.target_y = options[choice][1] * 64 + 32;
+      continue;
+    }
+    if (animal.x < animal.target_x) {
+      animal.x += SDL_min(ANIMAL_SPEED_PER_TICK, animal.target_x - animal.x);
+      animal.facing = 0;
+    } else if (animal.x > animal.target_x) {
+      animal.x -= SDL_min(ANIMAL_SPEED_PER_TICK, animal.x - animal.target_x);
+      animal.facing = 4;
+    } else if (animal.y < animal.target_y) {
+      animal.y += SDL_min(ANIMAL_SPEED_PER_TICK, animal.target_y - animal.y);
+      animal.facing = 2;
+    } else if (animal.y > animal.target_y) {
+      animal.y -= SDL_min(ANIMAL_SPEED_PER_TICK, animal.y - animal.target_y);
+      animal.facing = 6;
+    }
   }
 }
