@@ -61,6 +61,24 @@ SDL_Surface * ZtdFile::getImageSurfaceBmp(const std::string &ztd_file, const std
     surface = IMG_LoadTyped_IO(rw, 1, "BMP");
     if (surface == NULL) {
       SDL_Log("Could not decode %s in %s: %s", file_name.c_str(), ztd_file.c_str(), SDL_GetError());
+    } else {
+      // Sprite bitmaps mark their transparent area in a color no artwork
+      // uses: magenta, or the shocking pink of the terrain fringe art.
+      // Only the top left pixel decides, so bitmaps that are meant to be
+      // opaque keep every pixel they have.
+      const SDL_PixelFormatDetails * format = SDL_GetPixelFormatDetails(surface->format);
+      if (format != nullptr && format->Amask == 0 && surface->w > 0 && surface->h > 0) {
+        uint8_t r = 0;
+        uint8_t g = 0;
+        uint8_t b = 0;
+        if (SDL_ReadSurfacePixel(surface, 0, 0, &r, &g, &b, nullptr)) {
+          bool is_key = (r == 255 && g == 0 && (b == 255 || b == 128));
+          if (is_key) {
+            SDL_SetSurfaceColorKey(surface, true, SDL_MapRGB(format, nullptr, r, g, b));
+            SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
+          }
+        }
+      }
     }
     free(file_content);
   } else {

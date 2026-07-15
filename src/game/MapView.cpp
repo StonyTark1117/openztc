@@ -590,12 +590,34 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
       if (texture != nullptr) {
         // Boundary blending draws neighbor textures with vertex alpha
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+        // Point sampling: the diamond UV mapping rarely lands on texel
+        // centers, and the linear filter was washing out the ground
+        // grain (measured: half the original's local contrast on sand)
+        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
         this->terrain_textures[type] = texture;
       }
     }
     delete reader;
   }
-  SDL_Log("Loaded %i terrain textures", (int) this->terrain_textures.size());
+  // The rocky wedges the original draws over cliff edges, one sprite per
+  // height step of a tile edge. "l" faces descend to the right, "r" to
+  // the left, and the digits are the corner pattern of the drop.
+  static const char * fringe_names[] = {"l0001", "l0010", "l0011", "l0110", "l1011",
+                                        "r0001", "r0010", "r0011", "r0110", "r1011"};
+  for (const char * name : fringe_names) {
+    SDL_Texture * texture =
+        this->resource_manager->getTexture(renderer, std::string("fringe/") + name + ".bmp");
+    if (texture != nullptr) {
+      SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+      // The sprites carry their own light and shade, the bright side and
+      // the dark side; the terrain's flat light still scales them (their
+      // art reads 4 percent brighter than the original draws them)
+      SDL_SetTextureColorMod(texture, 245, 245, 245);
+      this->fringe_textures[name] = texture;
+    }
+  }
+  SDL_Log("Loaded %i terrain textures, %i fringe sprites", (int) this->terrain_textures.size(),
+          (int) this->fringe_textures.size());
 }
 
 void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
@@ -620,6 +642,13 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   std::map<int, std::vector<int>> blend_indices;
   std::unordered_map<int, std::vector<SDL_Vertex>> cliff_batches;
   std::unordered_map<int, std::vector<int>> cliff_indices;
+  // Cliff faces are the original's fringe sprites, collected here and
+  // drawn before the tile tops like the old face quads were
+  struct FringeDraw {
+    std::string name;
+    SDL_FRect rect;
+  };
+  std::vector<FringeDraw> fringe_draws;
 
   // The tile type at a position, or -1 off the map
   auto typeAt = [&](int x, int y) -> int {
@@ -700,33 +729,55 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         float by_high = corners[mine_b].y - (high_b - corner_h[mine_b]) * HEIGHT_STEP * this->zoom;
         float ay_low = ay_high + (high_a - low_a) * HEIGHT_STEP * this->zoom;
         float by_low = by_high + (high_b - low_b) * HEIGHT_STEP * this->zoom;
-        float cliff_shade = 0.6f;
-        SDL_FColor cliff_color = {cliff_shade, cliff_shade, cliff_shade, 1.0f};
-        SDL_FPoint cliff_positions[4] = {{ax, ay_high}, {bx, by_high}, {bx, by_low}, {ax, ay_low}};
-        const SDL_FPoint cliff_uv[4] = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
-        std::vector<SDL_Vertex> &cliff_vertices = cliff_batches[cliff_type];
-        std::vector<int> &cliff_index_list = cliff_indices[cliff_type];
-        int cliff_base = (int) cliff_vertices.size();
-        for (int i = 0; i < 4; i++) {
-          SDL_Vertex vertex;
-          vertex.position = cliff_positions[i];
-          vertex.color = cliff_color;
-          vertex.tex_coord = cliff_uv[i];
-          cliff_vertices.push_back(vertex);
+        // The original does not texture cliff faces with the terrain at
+        // all: it draws the rocky fringe sprites from fringe.ztd, the
+        // same brown rock whatever the terrain type (verified by loading
+        // one plateau save painted sand and again painted snow — both
+        // render identical faces). One sprite spans a single height step
+        // over one tile edge, so a taller drop stacks copies.
+        (void) cliff_type;
+        // The sprite whose top edge falls the way this edge does: the
+        // "r" art descends to the left, "l" to the right
+        bool a_left = ax < bx;
+        float left_x = a_left ? ax : bx;
+        float left_y_high = a_left ? ay_high : by_high;
+        float right_y_high = a_left ? by_high : ay_high;
+        float left_drop = (a_left ? ay_low - ay_high : by_low - by_high);
+        float right_drop = (a_left ? by_low - by_high : ay_low - ay_high);
+        bool descends_left = left_y_high > right_y_high;
+        const char * side = descends_left ? "r" : "l";
+        float step_px = HEIGHT_STEP * this->zoom;
+        int left_steps = (int) SDL_lroundf(left_drop / step_px);
+        int right_steps = (int) SDL_lroundf(right_drop / step_px);
+        int both = SDL_min(left_steps, right_steps);
+        // The band art of one step, stacked down the shared part of the
+        // drop, then the wedge art for the corner that drops further
+        float top_y = SDL_min(left_y_high, right_y_high);
+        for (int step = 0; step < both; step++) {
+          FringeDraw draw;
+          draw.name = std::string(side) + "0011";
+          draw.rect = {left_x, top_y + (float) step * step_px, 32.0f * this->zoom,
+                       64.0f * this->zoom};
+          fringe_draws.push_back(draw);
         }
-        cliff_index_list.push_back(cliff_base);
-        cliff_index_list.push_back(cliff_base + 1);
-        cliff_index_list.push_back(cliff_base + 2);
-        cliff_index_list.push_back(cliff_base);
-        cliff_index_list.push_back(cliff_base + 2);
-        cliff_index_list.push_back(cliff_base + 3);
+        // Where one corner drops further than the other the face is a
+        // wedge; the original has sprites for those, but stacking the
+        // band to the deeper corner covers the same ground and the tile
+        // tops drawn afterwards trim the overhang
+        for (int step = both; step < SDL_max(left_steps, right_steps); step++) {
+          FringeDraw draw;
+          draw.name = std::string(side) + "0011";
+          draw.rect = {left_x, top_y + (float) step * step_px, 32.0f * this->zoom,
+                       64.0f * this->zoom};
+          fringe_draws.push_back(draw);
+        }
       }
 
       // Slope shading per corner, like the original's per vertex lit
       // terrain mesh: slopes shade smoothly across tile boundaries
       // instead of stepping per tile. Flat terrain renders at roughly
-      // 0.95 of the texture color (measured on fshore.zoo water against
-      // depwater.tga).
+      // 0.96 of the texture color (flat regions across five maps
+      // measured 1 to 1.5 percent darker than the original at 0.95).
       float corner_bright[4];
       for (int i = 0; i < 4; i++) {
         int cx = (int) tile_x + corner_offsets[i][0];
@@ -738,7 +789,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         };
         float gradient_x = (clamped_h(cx + 1, cy) - clamped_h(cx - 1, cy)) * 0.5f;
         float gradient_y = (clamped_h(cx, cy + 1) - clamped_h(cx, cy - 1)) * 0.5f;
-        corner_bright[i] = std::clamp(0.95f - 0.15f * (gradient_x + gradient_y), 0.4f, 1.0f);
+        corner_bright[i] = std::clamp(0.96f - 0.15f * (gradient_x + gradient_y), 0.4f, 1.0f);
       }
       float brightness = (corner_bright[0] + corner_bright[1] + corner_bright[2] + corner_bright[3]) / 4.0f;
 
@@ -839,6 +890,16 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     SDL_RenderGeometry(renderer, this->terrain_textures[batch.first], batch.second.data(),
                        (int) batch.second.size(), cliff_indices[batch.first].data(),
                        (int) cliff_indices[batch.first].size());
+  }
+  for (const FringeDraw &draw : fringe_draws) {
+    auto found = this->fringe_textures.find(draw.name);
+    if (found == this->fringe_textures.end() || found->second == nullptr) {
+      continue;
+    }
+    SDL_FRect rect = draw.rect;
+    rect.x = SDL_roundf(rect.x);
+    rect.y = SDL_roundf(rect.y);
+    SDL_RenderTexture(renderer, found->second, NULL, &rect);
   }
   for (auto &batch : batches) {
     SDL_Texture * texture = this->terrain_textures.contains(batch.first) ? this->terrain_textures[batch.first] : nullptr;

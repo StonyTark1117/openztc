@@ -56,6 +56,8 @@ private:
   ZooFile * zoo = nullptr;
 
   std::unordered_map<int, SDL_Texture *> terrain_textures;
+  // The original's cliff face art from fringe.ztd, by sprite name
+  std::unordered_map<std::string, SDL_Texture *> fringe_textures;
   // Terrain types with a water= flag in the tiletex configs
   std::unordered_set<int> water_terrain_types;
   bool textures_loaded = false;
