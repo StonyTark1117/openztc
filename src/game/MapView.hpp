@@ -72,6 +72,9 @@ private:
   float material_ambient = 1.0f;
   // Terrain types with a water= flag in the tiletex configs
   std::unordered_set<int> water_terrain_types;
+  // Terrain types the tiletex configs mark blend=0: concrete and asphalt
+  // keep a hard edge against their neighbors instead of splatting
+  std::unordered_set<int> unblended_terrain_types;
   bool textures_loaded = false;
 
   // Objects sorted in paint order and their animations by object code

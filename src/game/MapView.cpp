@@ -674,6 +674,9 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
       if (type >= 0 && reader->getInt(section, "water", 0) > 0) {
         this->water_terrain_types.insert(type);
       }
+      if (type >= 0 && reader->getInt(section, "blend", 1) == 0) {
+        this->unblended_terrain_types.insert(type);
+      }
       if (type < 0 || texture_name.empty() || this->terrain_textures.contains(type)) {
         continue;
       }
@@ -913,17 +916,22 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       // Where a different terrain type touches this tile — including
       // diagonally — its texture splats across the whole tile, full at the
       // corners that touch it and fading to nothing at the ones that do
-      // not, the way the original's blended terrain mesh looks. Lower type
-      // numbers paint over higher ones, so each overlay type is gathered
-      // once from all eight neighbors.
+      // not, the way the original's blended terrain mesh looks. Higher type
+      // numbers paint over lower ones: Death Mountain's gray rock (06) is
+      // what covers its brown rock (05), and painting it the other way
+      // round left the ground 13 percent dark and orange against the
+      // original. Each overlay type is gathered once from all eight
+      // neighbors. Concrete and asphalt carry blend=0 and take no part.
       const int around_offsets[8][2] = {{0, -1}, {1, -1}, {1, 0},  {1, 1},
                                         {0, 1},  {-1, 1}, {-1, 0}, {-1, -1}};
       int overlay_types[8];
       int overlay_count = 0;
-      for (int i = 0; i < 8; i++) {
+      bool tile_blends = !this->unblended_terrain_types.contains((int) tile.type);
+      for (int i = 0; i < 8 && tile_blends; i++) {
         int neighbor_type = typeAt((int) tile_x + around_offsets[i][0], (int) tile_y + around_offsets[i][1]);
-        if (neighbor_type < 0 || neighbor_type >= (int) tile.type ||
-            !this->terrain_textures.contains(neighbor_type)) {
+        if (neighbor_type < 0 || neighbor_type <= (int) tile.type ||
+            !this->terrain_textures.contains(neighbor_type) ||
+            this->unblended_terrain_types.contains(neighbor_type)) {
           continue;
         }
         bool seen = false;
@@ -997,12 +1005,13 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     SDL_RenderGeometry(renderer, texture, batch.second.data(), (int) batch.second.size(),
                        batch_indices[batch.first].data(), (int) batch_indices[batch.first].size());
   }
-  // Higher type numbers first so the lower, higher priority types land on
-  // top where overlays stack
-  for (auto batch = blend_batches.rbegin(); batch != blend_batches.rend(); ++batch) {
-    SDL_RenderGeometry(renderer, this->terrain_textures[batch->first], batch->second.data(),
-                       (int) batch->second.size(), blend_indices[batch->first].data(),
-                       (int) blend_indices[batch->first].size());
+  // Lower type numbers first so the higher, higher priority types land on
+  // top where overlays stack. blend_batches is a std::map, so walking it
+  // forward walks the types in order.
+  for (auto &batch : blend_batches) {
+    SDL_RenderGeometry(renderer, this->terrain_textures[batch.first], batch.second.data(),
+                       (int) batch.second.size(), blend_indices[batch.first].data(),
+                       (int) blend_indices[batch.first].size());
   }
 
   this->drawObjects(renderer, window_rect, center_x, center_y);
