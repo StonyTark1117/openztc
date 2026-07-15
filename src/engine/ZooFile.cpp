@@ -270,6 +270,7 @@ static bool findEntityPosition(const uint8_t * data, size_t size, uint32_t map_s
     }
     object.x = x;
     object.y = y;
+    object.elevation = (int32_t) readUint32(data, offset - 12);
     object.rotation = readUint32(data, offset - 8);
     return true;
   }
@@ -312,12 +313,14 @@ void ZooFile::parseObjects() {
     }
     object.x = 0;
     object.y = 0;
+    object.elevation = 0;
     object.rotation = 0;
     if (isEntityCategory(object.category)) {
       findEntityPosition(data + position, remaining, this->width, object);
     } else if (remaining >= 20) {
       object.x = readUint32(data, position + 4);
       object.y = readUint32(data, position + 8);
+      object.elevation = (int32_t) readUint32(data, position + 12);
       object.rotation = readUint32(data, position + 16);
     }
     position += remaining;

@@ -26,12 +26,15 @@ typedef struct {
 
 // One placed object. Positions are in 64ths of a tile. Only the fields
 // needed for rendering are decoded, the rest of the record is kept raw.
+// The elevation is the object's anchor height the original computed at
+// placement time, in 16ths of a terrain height step.
 typedef struct {
   std::string category;
   std::string subcategory;
   std::string code;
   uint32_t x;
   uint32_t y;
+  int32_t elevation;
   uint32_t rotation;
 } ZooObject;
 

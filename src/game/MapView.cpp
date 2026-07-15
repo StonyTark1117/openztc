@@ -12,7 +12,12 @@
 // side by side comparison.
 #define TILE_HALF_WIDTH 32.0f
 #define TILE_HALF_HEIGHT 16.0f
-#define HEIGHT_STEP 12.0f
+// One terrain height step in pixels at zoom 1. Measured on a controlled
+// save in the original (fencetest.zoo: wall terraces at known heights):
+// fence anchors drop 8px per half step and cliff faces stand ~16px tall,
+// so a step is 16px — matching the stored object elevations, which are
+// exactly pixels at zoom 1 (16ths of a step).
+#define HEIGHT_STEP 16.0f
 
 #define ZOOM_MIN 0.25f
 #define ZOOM_MAX 3.0f
@@ -1163,32 +1168,25 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     float world_x;
     float world_y;
     this->tileToWorld(tile_x, tile_y, &world_x, &world_y);
-    // Anchor the sprite at the interpolated terrain height under it so
-    // objects follow slopes. A fence piece anchors at its edge's midpoint
-    // (verified pixel aligned against the original on fshore.zoo); an
-    // edge dropping more than the one step the slope art can span sits
-    // flat at the low end, like the original (traced on deathmtn). The
-    // face still fills down to the ground where that sits lower.
+    // Anchor the sprite at the elevation the original computed when the
+    // object was placed, stored in its record in 16ths of a height step.
+    // That is the original's own answer for slopes and cliffs — deriving
+    // it from the terrain (corner claims, interpolation) drifted from the
+    // real game wherever tiles disagree about an edge. A wall face still
+    // fills downward where the ground sits more than a piece below.
+    float anchor = (float) object->elevation / 16.0f;
     int fence_face_fill = 0;
     if (object->category == "fences" || object->category == "tankwall") {
       float edge_start = 0.0f;
       float edge_end = 0.0f;
       float edge_ground = 0.0f;
       this->fenceEdgeHeights(object, &edge_start, &edge_end, nullptr, &edge_ground);
-      float anchor;
-      if (SDL_fabsf(edge_end - edge_start) >= 2.0f) {
-        anchor = SDL_min(edge_start, edge_end);
-      } else {
-        anchor = (edge_start + edge_end) * 0.5f;
-      }
       fence_face_fill = (int) SDL_ceilf(anchor - edge_ground) - 1;
       if (fence_face_fill < 0) {
         fence_face_fill = 0;
       }
-      world_y -= anchor * HEIGHT_STEP;
-    } else {
-      world_y -= this->heightAt(tile_x, tile_y) * HEIGHT_STEP;
     }
+    world_y -= anchor * HEIGHT_STEP;
     float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
     float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
     if (screen_x < -200.0f || screen_x > window_rect->w + 200.0f ||
