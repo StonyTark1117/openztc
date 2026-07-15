@@ -58,6 +58,18 @@ private:
   std::unordered_map<int, SDL_Texture *> terrain_textures;
   // The original's cliff face art from fringe.ztd, by sprite name
   std::unordered_map<std::string, SDL_Texture *> fringe_textures;
+  // The original's terrain light rig from terrain/tilevar.cfg. The game
+  // parses those keys and feeds them to Direct3D as directional lights
+  // over the terrain mesh, so the terrain shades with them rather than
+  // with any light of our own.
+  struct TerrainLight {
+    float direction[3] = {0.0f, -1.0f, 0.0f};
+    float diffuse = 0.0f;
+    float ambient = 0.0f;
+  };
+  std::vector<TerrainLight> terrain_lights;
+  float material_diffuse = 1.0f;
+  float material_ambient = 1.0f;
   // Terrain types with a water= flag in the tiletex configs
   std::unordered_set<int> water_terrain_types;
   bool textures_loaded = false;
@@ -91,6 +103,10 @@ private:
   std::vector<float> tile_corner_heights;
 
   void loadTerrainTextures(SDL_Renderer * renderer);
+  void loadTerrainLights();
+  // Diffuse light on a terrain vertex, given the height field gradient
+  // there in height steps per tile
+  float terrainBrightness(float gradient_x, float gradient_y);
   void drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y);
   Animation * objectAnimation(const ZooObject * object, std::string &draw_key);
   void buildCornerHeights();

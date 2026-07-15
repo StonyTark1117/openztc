@@ -18,6 +18,12 @@
 // so a step is 16px — matching the stored object elevations, which are
 // exactly pixels at zoom 1 (16ths of a step).
 #define HEIGHT_STEP 16.0f
+// One height step as a fraction of a tile width in the original's world.
+// A tile draws 64 pixels wide and a step stands 16 pixels tall, which
+// under the 30 degree isometric camera those two numbers imply puts the
+// step at 1/sqrt(6) of a tile. Terrain lighting needs it to turn the
+// height field's gradient into a world space normal.
+#define HEIGHT_SCALE 0.40824829f
 
 #define ZOOM_MIN 0.25f
 #define ZOOM_MAX 3.0f
@@ -565,8 +571,93 @@ bool MapView::handleInputs(std::vector<Input> &inputs) {
   return true;
 }
 
+// The original's terrain light rig lives in terrain/tilevar.cfg: two
+// directional lights and a material, which the game hands to Direct3D to
+// light the terrain mesh per vertex. Reading it here keeps the rig the
+// data's business, so a mod that retunes the lights retunes ours too.
+void MapView::loadTerrainLights() {
+  IniReader * reader = this->resource_manager->getIniReader("terrain/tilevar.cfg");
+  if (reader == nullptr) {
+    return;
+  }
+  auto readFloat = [&](const std::string &section, const std::string &key, float fallback) -> float {
+    std::string value = reader->get(section, key);
+    return value.empty() ? fallback : (float) atof(value.c_str());
+  };
+  // The rig is grey: the configs light every channel alike, so one
+  // number per color carries it
+  this->material_diffuse = readFloat("mtrl.diffuse", "R", 1.0f);
+  this->material_ambient = readFloat("mtrl.ambient", "R", 1.0f);
+  this->terrain_lights.clear();
+  std::vector<std::string> sections = reader->getSections();
+  for (int index = 0;; index++) {
+    std::string name = "light" + std::to_string(index);
+    if (std::find(sections.begin(), sections.end(), name + ".direction") == sections.end()) {
+      break;
+    }
+    TerrainLight light;
+    light.direction[0] = readFloat(name + ".direction", "X", 0.0f);
+    light.direction[1] = readFloat(name + ".direction", "Y", -1.0f);
+    light.direction[2] = readFloat(name + ".direction", "Z", 0.0f);
+    float length = SDL_sqrtf(light.direction[0] * light.direction[0] +
+                             light.direction[1] * light.direction[1] +
+                             light.direction[2] * light.direction[2]);
+    if (length <= 0.0f) {
+      continue;
+    }
+    for (int axis = 0; axis < 3; axis++) {
+      light.direction[axis] /= length;
+    }
+    light.diffuse = readFloat(name + ".diffuse", "R", 0.0f);
+    light.ambient = readFloat(name + ".ambient", "R", 0.0f);
+    this->terrain_lights.push_back(light);
+  }
+  delete reader;
+  SDL_Log("Loaded %zu terrain lights, flat ground lights to %.4f", this->terrain_lights.size(),
+          this->terrainBrightness(0.0f, 0.0f));
+}
+
+float MapView::terrainBrightness(float gradient_x, float gradient_y) {
+  if (this->terrain_lights.empty()) {
+    return 1.0f;
+  }
+  // The original's world has y up, the way its light directions read, so
+  // the height field's normal is (-dy/dx, 1, -dy/dz) with the gradients
+  // scaled from height steps per tile into world units.
+  // Both lights lie in the world's xy plane, so only the slope along the
+  // world's x axis changes the light and a slope along z merely tilts the
+  // normal away from both. The original's x axis runs along the map's
+  // negative y and its z along the map's x: its cliff face art lights the
+  // faces pointing down the screen along +y and shades those pointing
+  // along -x, and Death Mountain shows the same faces at 89 against 62
+  // luminance. Only this mapping puts the light on that side.
+  float world_gradient_x = -gradient_y;
+  float world_gradient_z = gradient_x;
+  float normal_x = -world_gradient_x * HEIGHT_SCALE;
+  float normal_y = 1.0f;
+  float normal_z = -world_gradient_z * HEIGHT_SCALE;
+  float length = SDL_sqrtf(normal_x * normal_x + normal_y * normal_y + normal_z * normal_z);
+  normal_x /= length;
+  normal_y /= length;
+  normal_z /= length;
+
+  float light = 0.0f;
+  for (const TerrainLight &terrain_light : this->terrain_lights) {
+    light += this->material_ambient * terrain_light.ambient;
+    // A Direct3D light direction points the way the light travels, so
+    // the surface faces the light when the dot product turns negative
+    float dot = -(normal_x * terrain_light.direction[0] + normal_y * terrain_light.direction[1] +
+                  normal_z * terrain_light.direction[2]);
+    if (dot > 0.0f) {
+      light += this->material_diffuse * terrain_light.diffuse * dot;
+    }
+  }
+  return std::clamp(light, 0.0f, 1.0f);
+}
+
 void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
   this->textures_loaded = true;
+  this->loadTerrainLights();
   // Terrain types and their textures are defined in the tiletex config
   // files, expansions add their own
   for (std::string config_name : this->resource_manager->getResourceNamesWithExtension("CFG")) {
@@ -775,9 +866,9 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
 
       // Slope shading per corner, like the original's per vertex lit
       // terrain mesh: slopes shade smoothly across tile boundaries
-      // instead of stepping per tile. Flat terrain renders at roughly
-      // 0.96 of the texture color (flat regions across five maps
-      // measured 1 to 1.5 percent darker than the original at 0.95).
+      // instead of stepping per tile. The light comes from the rig the
+      // original keeps in terrain/tilevar.cfg, which puts flat ground at
+      // 0.979 of the texture color.
       float corner_bright[4];
       for (int i = 0; i < 4; i++) {
         int cx = (int) tile_x + corner_offsets[i][0];
@@ -789,7 +880,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         };
         float gradient_x = (clamped_h(cx + 1, cy) - clamped_h(cx - 1, cy)) * 0.5f;
         float gradient_y = (clamped_h(cx, cy + 1) - clamped_h(cx, cy - 1)) * 0.5f;
-        corner_bright[i] = std::clamp(0.96f - 0.15f * (gradient_x + gradient_y), 0.4f, 1.0f);
+        corner_bright[i] = this->terrainBrightness(gradient_x, gradient_y);
       }
       float brightness = (corner_bright[0] + corner_bright[1] + corner_bright[2] + corner_bright[3]) / 4.0f;
 
