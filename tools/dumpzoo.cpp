@@ -100,10 +100,10 @@ int main(int argc, char ** argv) {
     }
     if (list_objects) {
       for (const ZooObject &object : zoo->getObjects()) {
-        printf("  %s/%s/%s x=%u (%.2f) y=%u (%.2f) rotation=%u elev=%d (%.2f steps)\n",
+        printf("  %s/%s/%s x=%u (%.2f) y=%u (%.2f) rotation=%u elev=%d (%.2f steps) color=%u\n",
                object.category.c_str(), object.subcategory.c_str(), object.code.c_str(),
                object.x, (float) object.x / 64.0f, object.y, (float) object.y / 64.0f, object.rotation,
-               object.elevation, (float) object.elevation / 16.0f);
+               object.elevation, (float) object.elevation / 16.0f, object.color);
       }
     }
     delete zoo;

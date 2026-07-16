@@ -1706,31 +1706,53 @@ std::string MapView::objectArtPath(const ZooObject * object) {
 // top of their pallet, after the [cr_color] ncolors fixed ones. The ai's
 // [colorrep] block names the default replacement ramp; without it the base
 // art draws in the neutral gray it ships with, which the original never
-// shows (verified against med_kids' sub shop, lime by default).
+// shows (verified against med_kids' sub shop, lime by default). The saved
+// record carries the player's choice as an index into the shared palette
+// list of building.ai's [cr_part1] — default-placed buildings store their
+// defaultpal's own index, and scn36's grandstands genuinely vary.
 std::pair<std::string, int> MapView::objectColorRep(const ZooObject * object) {
+  std::pair<std::string, int> result;
   if (this->color_replacements.contains(object->code)) {
-    return this->color_replacements[object->code];
-  }
-  std::pair<std::string, int> result = {"", 0};
-  if (!this->registry_loaded) {
-    this->loadObjectRegistry();
-  }
-  std::string ai_path = this->registryLookup(object->subcategory, object->code);
-  if (ai_path.empty()) {
-    ai_path = this->registryLookup(object->category, object->subcategory);
-  }
-  if (!ai_path.empty()) {
-    IniReader * ai_reader = this->resource_manager->getIniReader(ai_path);
-    if (ai_reader != nullptr) {
-      std::string default_pallet = ai_reader->get("colorrep", "defaultpal");
-      int fixed_colors = ai_reader->getInt("cr_color", "ncolors");
-      if (!default_pallet.empty() && fixed_colors > 0) {
-        result = {default_pallet, fixed_colors};
+    result = this->color_replacements[object->code];
+  } else {
+    result = {"", 0};
+    if (!this->registry_loaded) {
+      this->loadObjectRegistry();
+    }
+    std::string ai_path = this->registryLookup(object->subcategory, object->code);
+    if (ai_path.empty()) {
+      ai_path = this->registryLookup(object->category, object->subcategory);
+    }
+    if (!ai_path.empty()) {
+      IniReader * ai_reader = this->resource_manager->getIniReader(ai_path);
+      if (ai_reader != nullptr) {
+        std::string default_pallet = ai_reader->get("colorrep", "defaultpal");
+        int fixed_colors = ai_reader->getInt("cr_color", "ncolors");
+        if (!default_pallet.empty() && fixed_colors > 0) {
+          result = {default_pallet, fixed_colors};
+        }
+        delete ai_reader;
       }
-      delete ai_reader;
+    }
+    this->color_replacements[object->code] = result;
+  }
+  if (result.first.empty() || object->color == 255) {
+    return result;
+  }
+  if (this->shared_color_pallets.empty()) {
+    IniReader * building_reader = this->resource_manager->getIniReader("building.ai");
+    if (building_reader != nullptr) {
+      this->shared_color_pallets = building_reader->getList("cr_part1", "pal");
+      delete building_reader;
+    }
+    if (this->shared_color_pallets.empty()) {
+      // Poison against re-reading every frame when the list is absent
+      this->shared_color_pallets.push_back("");
     }
   }
-  this->color_replacements[object->code] = result;
+  if (object->color < this->shared_color_pallets.size() && !this->shared_color_pallets[object->color].empty()) {
+    result.first = this->shared_color_pallets[object->color];
+  }
   return result;
 }
 
@@ -1919,7 +1941,10 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     if (!draw_key.empty()) {
       candidates.push_back("objects/" + object->code + "/" + draw_key + "/" + draw_key);
     }
-    cache_key = object->category + "/" + object->subcategory + "/" + object->code + ":" + draw_key;
+    // The color index joins the key so two same-code buildings in
+    // different colors keep their own art
+    cache_key = object->category + "/" + object->subcategory + "/" + object->code + ":" + draw_key +
+                ":" + std::to_string(object->color);
     if (this->object_animations.contains(cache_key)) {
       return this->object_animations[cache_key];
     }

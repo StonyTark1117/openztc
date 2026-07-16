@@ -316,6 +316,7 @@ void ZooFile::parseObjects() {
     object.y = 0;
     object.elevation = 0;
     object.rotation = 0;
+    object.color = 255;
     if (isEntityCategory(object.category)) {
       findEntityPosition(data + position, remaining, this->width, object);
     } else if (remaining >= 20) {
@@ -323,6 +324,17 @@ void ZooFile::parseObjects() {
       object.y = readUint32(data, position + 8);
       object.elevation = (int32_t) readUint32(data, position + 12);
       object.rotation = readUint32(data, position + 16);
+      // Buildings keep their color choice 43 bytes into the state that
+      // follows the id and the length-prefixed display name (verified by
+      // recoloring a hot dog stand in the original: gold 3 -> sky 22, and
+      // med_kids' default stands carry exactly their ai defaultpal index)
+      if (remaining >= 32) {
+        uint32_t name_length = readUint32(data, position + 24);
+        size_t color_offset = 28 + (size_t) name_length + 43;
+        if (name_length < remaining && color_offset < remaining) {
+          object.color = data[position + color_offset];
+        }
+      }
     }
     position += remaining;
     this->objects.push_back(object);

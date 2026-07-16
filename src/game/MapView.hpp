@@ -169,6 +169,9 @@ private:
   std::pair<std::string, int> objectColorRep(const ZooObject * object);
   // Color replacement per object code, cached including the misses
   std::unordered_map<std::string, std::pair<std::string, int>> color_replacements;
+  // The shared building recolor palettes from building.ai's [cr_part1],
+  // indexed by the color byte the saved records carry
+  std::vector<std::string> shared_color_pallets;
 };
 
 #endif // MAP_VIEW_HPP

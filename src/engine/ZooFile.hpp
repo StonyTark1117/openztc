@@ -36,6 +36,11 @@ typedef struct {
   uint32_t y;
   int32_t elevation;
   uint32_t rotation;
+  // The color replacement choice for buildings: an index into the shared
+  // palette list the ai's colorrep block references (blue 0, green 1,
+  // teal 2, gold 3, ..., sky 22, bone 23). The default-placed buildings
+  // store their defaultpal's index. 255 when the record has no room.
+  uint8_t color;
 } ZooObject;
 
 // One exhibit, following the layout the community documented: position of
