@@ -1207,21 +1207,6 @@ std::string MapView::objectArtPath(const ZooObject * object) {
     }
     result = value;
   } else if (!value.empty()) {
-    // A plain object usually keeps its animations under objects/<code>, so
-    // try that before believing the icon. Deriving the directory from the
-    // icon assumes the two live together, and for the drink stand they do
-    // not: its icons are under objects/dnkstnd while its animations are under
-    // objects/drkstnd, so it resolved to a directory holding nothing but
-    // icons and drew nothing at all. The icon is still the better guide for
-    // the food bowls, whose art really does sit elsewhere, so it stays as the
-    // fallback rather than being replaced.
-    if (!group) {
-      std::string by_code = "objects/" + object->code + "/" + value + "/" + value;
-      if (this->resource_manager->getAnimation(by_code) != nullptr) {
-        delete ai_reader;
-        return by_code;
-      }
-    }
     std::vector<std::string> icons = ai_reader->getList(group ? object->code + "/Icon" : "Icon", "Icon");
     if (icons.empty()) {
       icons = ai_reader->getList("Icon", "Icon");
