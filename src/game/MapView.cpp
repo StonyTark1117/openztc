@@ -1441,6 +1441,54 @@ void MapView::drawWaterTile(SDL_Renderer * renderer, const WaterDraw &draw, floa
     (float) SDL_lroundf(box_height * this->zoom),
   };
   top->drawByKey(renderer, &destination, "N", false, 128);
+  // The original re-places its transient edge ripples at runtime (their
+  // saved records carry no position): one along each wall edge of the
+  // tile, lying at the surface in the direction the edge runs on screen
+  auto sides = this->tank_wall_sides.find(((uint64_t) (uint32_t) (int) draw.tile_x << 32) | (uint32_t) (int) draw.tile_y);
+  if (sides == this->tank_wall_sides.end()) {
+    return;
+  }
+  Animation * ripple = this->resource_manager->getAnimation("objects/edgrip/idle/idle");
+  if (ripple == nullptr) {
+    return;
+  }
+  // Edge midpoints and endpoint pairs per side in the east, south, west,
+  // north bitmask order
+  static const float midpoints[4][2] = {{1.0f, 0.5f}, {0.5f, 1.0f}, {0.0f, 0.5f}, {0.5f, 0.0f}};
+  static const float endpoints[4][4] = {
+    {1.0f, 0.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
+  };
+  for (int side = 0; side < 4; side++) {
+    if ((sides->second & (1 << side)) == 0) {
+      continue;
+    }
+    float mid_world_x;
+    float mid_world_y;
+    this->tileToWorld(draw.tile_x + midpoints[side][0], draw.tile_y + midpoints[side][1], &mid_world_x, &mid_world_y);
+    mid_world_y -= draw.level * HEIGHT_STEP;
+    float start_x;
+    float start_y;
+    float end_x;
+    float end_y;
+    this->tileToWorld(draw.tile_x + endpoints[side][0], draw.tile_y + endpoints[side][1], &start_x, &start_y);
+    this->tileToWorld(draw.tile_x + endpoints[side][2], draw.tile_y + endpoints[side][3], &end_x, &end_y);
+    float run_x = end_x - start_x;
+    float run_y = end_y - start_y;
+    const char * ripple_key = run_x >= 0.0f == run_y >= 0.0f ? (run_x >= 0.0f ? "SE" : "NW")
+                                                             : (run_x >= 0.0f ? "NE" : "SW");
+    float ripple_x = (mid_world_x - this->camera_x) * this->zoom + center_x;
+    float ripple_y = (mid_world_y - this->camera_y) * this->zoom + center_y;
+    if (!ripple->getBox(&box_x0, &box_y0, &box_width, &box_height)) {
+      return;
+    }
+    SDL_FRect ripple_destination = {
+      (float) SDL_lroundf(ripple_x + box_x0 * this->zoom),
+      (float) SDL_lroundf(ripple_y + box_y0 * this->zoom),
+      (float) SDL_lroundf(box_width * this->zoom),
+      (float) SDL_lroundf(box_height * this->zoom),
+    };
+    ripple->drawByKey(renderer, &ripple_destination, ripple_key);
+  }
 }
 
 // The rotation field steps in increments of 2 per quarter turn, clockwise
