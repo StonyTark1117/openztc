@@ -62,6 +62,9 @@ private:
   std::unordered_map<uint32_t, std::string> string_map;
   std::unordered_map<std::string, Animation *> animation_map;
   std::unordered_map<std::string, Pallet *> pallet_map;
+  // Two-ramp color replacements composed into one pallet, keyed by the
+  // semicolon separated name pair from the ai
+  std::unordered_map<std::string, Pallet> composed_pallets;
   bool resource_map_loaded = false;
 
   std::string getResourceLocation(const std::string &resoure_name, bool failure_is_critical=true);

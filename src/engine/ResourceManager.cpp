@@ -233,11 +233,37 @@ Animation *ResourceManager::getAnimation(const std::string &file_name, const std
   // Animations are cached and owned by the resource manager, so elements
   // using the same animation share one instance. Recolored variants cache
   // under their own key.
+  // Art with two recolorable ramps names both palettes separated by a
+  // semicolon; the first ramp starts at replacement_start and the second
+  // follows it directly (232 fixed + 16 + 8 fills the 256 exactly on the
+  // scn08 stands)
   const Pallet * replacement_pallet = nullptr;
   std::string cache_key = file_name;
   if (!replacement_pallet_name.empty()) {
     std::string pallet_name = replacement_pallet_name;
-    replacement_pallet = this->pallet_manager.getPallet(pallet_name);
+    size_t semicolon = pallet_name.find(';');
+    if (semicolon == std::string::npos) {
+      replacement_pallet = this->pallet_manager.getPallet(pallet_name);
+    } else {
+      // Art with two recolorable ramps names both palettes separated by a
+      // semicolon. The ramps sit back to back in the art's pallet (232
+      // fixed + 16 + 8 fills the 256 exactly on the scn08 stands), so a
+      // composed replacement carries both after one sentinel.
+      std::string first_name = pallet_name.substr(0, semicolon);
+      std::string second_name = pallet_name.substr(semicolon + 1);
+      Pallet * first = this->pallet_manager.getPallet(first_name);
+      Pallet * second = this->pallet_manager.getPallet(second_name);
+      if (first != nullptr) {
+        Pallet &composed = this->composed_pallets[pallet_name];
+        composed = *first;
+        if (second != nullptr) {
+          for (uint32_t i = 1; i < second->color_count && composed.color_count < 256; i++) {
+            composed.colors[composed.color_count++] = second->colors[i];
+          }
+        }
+        replacement_pallet = &composed;
+      }
+    }
     if (replacement_pallet != nullptr) {
       cache_key += ";" + replacement_pallet_name + "@" + std::to_string(replacement_start);
     }
