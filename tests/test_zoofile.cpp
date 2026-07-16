@@ -168,3 +168,65 @@ TEST_CASE("a loaded zoo serializes back byte identical") {
   CHECK(memcmp(written.data(), file.data(), file.size()) == 0);
   delete zoo;
 }
+
+// A building record shaped like the real ones: three length-prefixed
+// strings, a length field, then x/y/elevation/rotation, an id, the
+// length-prefixed display name and the state that carries the color
+// choice 43 bytes in
+static std::vector<uint8_t> syntheticZooWithBuilding(uint8_t color, size_t state_bytes) {
+  std::vector<uint8_t> data = syntheticZoo(10, 12);
+  // drop the one-record object section syntheticZoo appended
+  data.resize(data.size() - (4 + 4 + 5 + 4 + 5));
+  auto push32 = [&data](uint32_t value) {
+    data.push_back(value & 0xFF);
+    data.push_back((value >> 8) & 0xFF);
+    data.push_back((value >> 16) & 0xFF);
+    data.push_back((value >> 24) & 0xFF);
+  };
+  auto pushString = [&data, &push32](const char * text) {
+    uint32_t length = (uint32_t) strlen(text);
+    push32(length);
+    data.insert(data.end(), text, text + length);
+  };
+  push32(1);
+  pushString("building");
+  pushString("building");
+  pushString("hdogstnd");
+  const char * name = "Hot Dog Stand 1";
+  uint32_t name_length = (uint32_t) strlen(name);
+  uint32_t remaining = 28 + name_length + (uint32_t) state_bytes;
+  push32(remaining);
+  push32(0);            // leading field
+  push32(5 * 64);       // x
+  push32(6 * 64);       // y
+  push32((uint32_t) -16);  // elevation
+  push32(4);            // rotation
+  push32(0x1234);       // id
+  pushString(name);
+  for (size_t i = 0; i < state_bytes; i++) {
+    data.push_back(i == 43 ? color : 0);
+  }
+  return data;
+}
+
+TEST_CASE("a building's color choice parses from its record") {
+  std::vector<uint8_t> file = syntheticZooWithBuilding(22, 104);
+  ZooFile * zoo = ZooFile::loadFromMemory(file.data(), file.size());
+  REQUIRE(zoo != nullptr);
+  REQUIRE(zoo->getObjects().size() == 1);
+  const ZooObject &object = zoo->getObjects()[0];
+  CHECK(object.code == "hdogstnd");
+  CHECK(object.x == 5 * 64);
+  CHECK(object.elevation == -16);
+  CHECK(object.color == 22);
+  delete zoo;
+}
+
+TEST_CASE("a record too short for the color stays unknown") {
+  std::vector<uint8_t> file = syntheticZooWithBuilding(22, 20);
+  ZooFile * zoo = ZooFile::loadFromMemory(file.data(), file.size());
+  REQUIRE(zoo != nullptr);
+  REQUIRE(zoo->getObjects().size() == 1);
+  CHECK(zoo->getObjects()[0].color == 255);
+  delete zoo;
+}
