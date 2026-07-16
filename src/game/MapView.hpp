@@ -144,6 +144,7 @@ private:
   void drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y);
   void buildTankWater();
   void drawWaterTile(SDL_Renderer * renderer, const WaterDraw &draw, float center_x, float center_y);
+  void drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object, float center_x, float center_y);
   Animation * objectAnimation(const ZooObject * object, std::string &draw_key);
   void buildCornerHeights();
   float cornerHeight(uint32_t x, uint32_t y);

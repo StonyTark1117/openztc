@@ -1302,6 +1302,114 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   this->drawObjects(renderer, window_rect, center_x, center_y);
 }
 
+// The water column seen through a glass tank wall: the water archive's
+// side views, one 32 pixel half edge segment per band of two steps from
+// the wall's base up to the surface, with the grey glass pane blended
+// over them. Only walls rising above the ground on their outer side show
+// glass; a dug pool's submerged lining stays plain under its surface
+// like the original. Faces whose outer flank sits nearer the camera are
+// the visible ones.
+void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object, float center_x, float center_y) {
+  float tile_x = SDL_roundf((float) object->x / 64.0f * 2.0f) / 2.0f;
+  float tile_y = SDL_roundf((float) object->y / 64.0f * 2.0f) / 2.0f;
+  bool y_run = tile_x == SDL_floorf(tile_x);
+  int ax;
+  int ay;
+  int bx;
+  int by;
+  if (y_run) {
+    ax = (int) tile_x - 1;
+    ay = (int) SDL_floorf(tile_y);
+    bx = (int) tile_x;
+    by = ay;
+  } else {
+    ax = (int) SDL_floorf(tile_x);
+    ay = (int) tile_y - 1;
+    bx = ax;
+    by = (int) tile_y;
+  }
+  float unused;
+  float depth_a;
+  float depth_b;
+  this->tileToWorld((float) ax + 0.5f, (float) ay + 0.5f, &unused, &depth_a);
+  this->tileToWorld((float) bx + 0.5f, (float) by + 0.5f, &unused, &depth_b);
+  int far_x = depth_a <= depth_b ? ax : bx;
+  int far_y = depth_a <= depth_b ? ay : by;
+  int near_x = depth_a <= depth_b ? bx : ax;
+  int near_y = depth_a <= depth_b ? by : ay;
+  auto tank = this->tank_water_tiles.find(((uint64_t) (uint32_t) far_x << 32) | (uint32_t) far_y);
+  if (tank == this->tank_water_tiles.end()) {
+    return;
+  }
+  if (this->tank_water_tiles.contains(((uint64_t) (uint32_t) near_x << 32) | (uint32_t) near_y)) {
+    return;
+  }
+  if (near_x < 0 || near_y < 0 || near_x >= (int) this->zoo->getWidth() || near_y >= (int) this->zoo->getHeight()) {
+    return;
+  }
+  float base = (float) object->elevation / 16.0f;
+  float outside = (float) (int32_t) this->zoo->getTile((uint32_t) near_x, (uint32_t) near_y).height;
+  if (base + TANK_WALL_STEPS <= outside) {
+    return;
+  }
+  // The face normal points from the tank to the outside; a rightward one
+  // on screen shows the right view, a leftward one the front view
+  float far_world_x;
+  float near_world_x;
+  this->tileToWorld((float) far_x + 0.5f, (float) far_y + 0.5f, &far_world_x, &unused);
+  this->tileToWorld((float) near_x + 0.5f, (float) near_y + 0.5f, &near_world_x, &unused);
+  bool right_face = near_world_x > far_world_x;
+  Animation * water = this->resource_manager->getAnimation(right_face ? "water/salt/right/right" : "water/salt/front/front");
+  Animation * glass = this->resource_manager->getAnimation(right_face ? "water/glass/rgrey/rgrey" : "water/glass/fgrey/fgrey");
+  if (water == nullptr) {
+    return;
+  }
+  float level = tank->second;
+  // Each face piece is one step of height (its 32 pixel box is the step
+  // plus the diamond slant); the ground outside hides everything below
+  // itself, so the column starts there
+  float start = SDL_max(base, outside);
+  int bands = (int) SDL_floorf(level - start);
+  for (int segment = 0; segment < 2; segment++) {
+    float segment_x;
+    float segment_y;
+    if (y_run) {
+      segment_x = tile_x;
+      segment_y = (float) ay + 0.25f + 0.5f * (float) segment;
+    } else {
+      segment_x = (float) ax + 0.25f + 0.5f * (float) segment;
+      segment_y = tile_y;
+    }
+    float world_x;
+    float world_y;
+    this->tileToWorld(segment_x, segment_y, &world_x, &world_y);
+    float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
+    for (int band = 0; band < bands; band++) {
+      float band_y = world_y - (start + (float) band) * HEIGHT_STEP;
+      float screen_y = (band_y - this->camera_y) * this->zoom + center_y;
+      float box_x0 = 0.0f;
+      float box_y0 = 0.0f;
+      float box_width = 0.0f;
+      float box_height = 0.0f;
+      if (!water->getBox(&box_x0, &box_y0, &box_width, &box_height)) {
+        return;
+      }
+      SDL_FRect destination = {
+        (float) SDL_lroundf(screen_x + box_x0 * this->zoom),
+        (float) SDL_lroundf(screen_y + box_y0 * this->zoom),
+        (float) SDL_lroundf(box_width * this->zoom),
+        (float) SDL_lroundf(box_height * this->zoom),
+      };
+      // The tank's contents show through the face in the original, so it
+      // blends at half like the surface does
+      water->drawByKey(renderer, &destination, "N", false, 128);
+      if (glass != nullptr) {
+        glass->drawByKey(renderer, &destination, "N", false, 128);
+      }
+    }
+  }
+}
+
 // One tile diamond of the tank water surface at its tank's level, drawn
 // translucent like the original's translucent water so the basin floor
 // and the submerged walls show through. Tanks aligned to full tiles tile
@@ -1774,6 +1882,9 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
       animation->drawByKey(renderer, &destination, draw_key, mirrored);
     } else {
       animation->draw(renderer, &destination);
+    }
+    if (object->category == "tankwall" && !this->tank_water_tiles.empty()) {
+      this->drawTankWallFace(renderer, object, center_x, center_y);
     }
   }
   while (water_index < this->water_draws.size()) {
