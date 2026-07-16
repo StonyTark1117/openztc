@@ -63,6 +63,7 @@ bool MapView::loadMap(const std::string &zoo_file_name) {
   }
   SDL_Log("Loaded map %s: %ux%u tiles, %u objects", zoo_file_name.c_str(), this->zoo->getWidth(), this->zoo->getHeight(), (uint32_t) this->zoo->getObjects().size());
   this->buildCornerHeights();
+  this->buildTankWater();
   for (const ZooObject &object : this->zoo->getObjects()) {
     this->sorted_objects.push_back(&object);
   }
@@ -72,36 +73,41 @@ bool MapView::loadMap(const std::string &zoo_file_name) {
       this->path_tiles[((uint64_t) (object.x / 64) << 32) | (object.y / 64)] = true;
     }
   }
-  this->buildTankWater();
   // Start looking at the middle of the map
   this->lookAtTile((float) this->zoo->getWidth() / 2.0f, (float) this->zoo->getHeight() / 2.0f);
   return true;
 }
 
-// Marine tanks are basins dug below the surrounding ground and lined with
-// tank wall pieces on the tile edges. Nothing in the save stores a water
-// level: the original fills the basin back up to the rim it was dug from.
-// Flood filling the regions the wall edges enclose finds the interiors —
-// the surrounding zoo reaches the map border, so bounded regions that
-// carry walls are the tanks.
+// Marine tanks are regions enclosed by tank wall pieces on the tile
+// edges. Nothing in the save stores a water level: the wall art is three
+// stacked glass bands of two steps each, so a tank fills to the top of
+// its six step walls or back up to the rim it was dug from, whichever is
+// higher — med_kids' shark tank (dug 3, glass 3 above ground) and its
+// dolphin and show pools (dug 8, walls fully submerged, open water at
+// the rim) both fall out of that. Flood filling the regions the wall
+// edges enclose finds the interiors — the surrounding zoo reaches the
+// map border, so bounded regions that carry walls are the tanks.
+#define TANK_WALL_STEPS 6.0f
 void MapView::buildTankWater() {
   this->tank_water_tiles.clear();
   this->tank_wall_sides.clear();
-  // Wall edges by the tile north/west of them: a horizontal edge at (x, y)
-  // runs between tiles (x, y-1) and (x, y), a vertical one between
-  // (x-1, y) and (x, y)
-  std::unordered_set<uint64_t> horizontal_edges;
-  std::unordered_set<uint64_t> vertical_edges;
+  // Wall edges by the tile north/west of them, valued at the wall's top:
+  // a horizontal edge at (x, y) runs between tiles (x, y-1) and (x, y),
+  // a vertical one between (x-1, y) and (x, y)
+  std::unordered_map<uint64_t, float> horizontal_edges;
+  std::unordered_map<uint64_t, float> vertical_edges;
   for (const ZooObject &object : this->zoo->getObjects()) {
     if (object.category != "tankwall") {
       continue;
     }
+    float wall_top = (float) object.elevation / 16.0f + TANK_WALL_STEPS;
     float tile_x = SDL_roundf((float) object.x / 64.0f * 2.0f) / 2.0f;
     float tile_y = SDL_roundf((float) object.y / 64.0f * 2.0f) / 2.0f;
-    if (tile_x != SDL_floorf(tile_x)) {
-      horizontal_edges.insert(((uint64_t) (uint32_t) tile_x << 32) | (uint32_t) tile_y);
-    } else {
-      vertical_edges.insert(((uint64_t) (uint32_t) tile_x << 32) | (uint32_t) tile_y);
+    std::unordered_map<uint64_t, float> &edges = tile_x != SDL_floorf(tile_x) ? horizontal_edges : vertical_edges;
+    uint64_t key = ((uint64_t) (uint32_t) tile_x << 32) | (uint32_t) tile_y;
+    auto found = edges.find(key);
+    if (found == edges.end() || wall_top > found->second) {
+      edges[key] = wall_top;
     }
   }
   if (horizontal_edges.empty() && vertical_edges.empty()) {
@@ -154,47 +160,61 @@ void MapView::buildTankWater() {
       if (touches_border || !has_wall) {
         continue;
       }
-      // The water fills up to the ground just outside the walls. The rim
-      // is the highest tile met across a wall edge, robust against ramps
-      // dug into the surroundings.
-      float rim = 0.0f;
-      bool rim_found = false;
+      // A dug basin fills to the ground just outside the walls — the
+      // highest tile met across a wall edge, robust against ramps dug
+      // into the surroundings — and a glass tank standing on the ground
+      // fills to the top of its walls, whichever is higher.
+      float level = 0.0f;
+      bool level_found = false;
       for (uint64_t key : region) {
         int x = (int) (key >> 32);
         int y = (int) (uint32_t) key;
-        bool wall[4] = {
-          vertical_edges.contains(((uint64_t) (uint32_t) (x + 1) << 32) | (uint32_t) y),
-          horizontal_edges.contains(((uint64_t) (uint32_t) x << 32) | (uint32_t) (y + 1)),
-          vertical_edges.contains(((uint64_t) (uint32_t) x << 32) | (uint32_t) y),
-          horizontal_edges.contains(((uint64_t) (uint32_t) x << 32) | (uint32_t) y),
+        const std::unordered_map<uint64_t, float> * edge_maps[4] = {
+          &vertical_edges, &horizontal_edges, &vertical_edges, &horizontal_edges,
+        };
+        const uint64_t edge_keys[4] = {
+          ((uint64_t) (uint32_t) (x + 1) << 32) | (uint32_t) y,
+          ((uint64_t) (uint32_t) x << 32) | (uint32_t) (y + 1),
+          ((uint64_t) (uint32_t) x << 32) | (uint32_t) y,
+          ((uint64_t) (uint32_t) x << 32) | (uint32_t) y,
         };
         static const int side_offsets[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
         int sides = 0;
         for (int side = 0; side < 4; side++) {
-          if (!wall[side]) {
+          auto wall = edge_maps[side]->find(edge_keys[side]);
+          if (wall == edge_maps[side]->end()) {
             continue;
           }
           sides |= 1 << side;
+          if (!level_found || wall->second > level) {
+            level = wall->second;
+            level_found = true;
+          }
           int ox = x + side_offsets[side][0];
           int oy = y + side_offsets[side][1];
           if (ox < 0 || oy < 0 || ox >= width || oy >= height) {
             continue;
           }
-          float outside = (float) (int32_t) this->zoo->getTile((uint32_t) ox, (uint32_t) oy).height / 16.0f;
-          if (!rim_found || outside > rim) {
-            rim = outside;
-            rim_found = true;
+          // Tile heights are whole steps; only object elevations are 16ths
+          float outside = (float) (int32_t) this->zoo->getTile((uint32_t) ox, (uint32_t) oy).height;
+          if (outside > level) {
+            level = outside;
           }
         }
         if (sides != 0) {
           this->tank_wall_sides[key] = sides;
         }
       }
-      if (!rim_found) {
+      if (!level_found) {
         continue;
       }
+      if (SDL_getenv("OPENZTC_DEBUG_TANK") != nullptr) {
+        int fx = (int) (region.front() >> 32);
+        int fy = (int) (uint32_t) region.front();
+        SDL_Log("tank region %zu tiles near (%d, %d) level %.2f", region.size(), fx, fy, level);
+      }
       for (uint64_t key : region) {
-        this->tank_water_tiles[key] = rim;
+        this->tank_water_tiles[key] = level;
       }
     }
   }
@@ -469,6 +489,40 @@ void MapView::sortObjects() {
                 return ka.phase < kb.phase;
               }
               return ka.depth < kb.depth;
+            });
+  // The paint keys aligned with the sorted order, for interleaving the
+  // tank water surface, and the water tiles in the same order. The
+  // surface draws at phase 2: after a tile's own objects and after the
+  // wall on its near edge, which a dug tank keeps below the surface.
+  this->sorted_object_keys.clear();
+  this->sorted_object_keys.reserve(this->sorted_objects.size());
+  for (const ZooObject * object : this->sorted_objects) {
+    const SortKey &key = keys[object];
+    this->sorted_object_keys.push_back({key.row, key.column, key.phase});
+  }
+  this->water_draws.clear();
+  for (const auto &entry : this->tank_water_tiles) {
+    WaterDraw draw;
+    draw.tile_x = (float) (int) (entry.first >> 32);
+    draw.tile_y = (float) (int) (uint32_t) entry.first;
+    draw.level = entry.second;
+    float center_world_x;
+    float center_depth;
+    this->tileToWorld(draw.tile_x + 0.5f, draw.tile_y + 0.5f, &center_world_x, &center_depth);
+    draw.key.row = (int) SDL_lroundf(center_depth / TILE_HALF_HEIGHT);
+    draw.key.column = (int) SDL_lroundf(center_world_x / TILE_HALF_WIDTH);
+    draw.key.phase = 2;
+    this->water_draws.push_back(draw);
+  }
+  std::sort(this->water_draws.begin(), this->water_draws.end(),
+            [](const WaterDraw &a, const WaterDraw &b) {
+              if (a.key.row != b.key.row) {
+                return a.key.row < b.key.row;
+              }
+              if (a.key.column != b.key.column) {
+                return a.key.column < b.key.column;
+              }
+              return a.key.phase < b.key.phase;
             });
   if (SDL_getenv("OPENZTC_DEBUG_SORT") != nullptr) {
     int index = 0;
@@ -1245,49 +1299,40 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
                        (int) blend_indices[batch.first].size());
   }
 
-  this->drawTankWater(renderer, center_x, center_y);
   this->drawObjects(renderer, window_rect, center_x, center_y);
 }
 
-// The tank water surface: one translucent diamond of the salt water top
-// art per interior tile at the basin's rim height. It draws between the
-// terrain and the objects, so the floor shows through underneath — the
-// original's translucent water display option — and the wall pieces
-// cover their side of the surface. Tanks aligned to full tiles tile the
-// surface with top alone; the half diamond tope/topn/tops/topw fringe
-// pieces are for half tile aligned tanks, which med_kids does not have.
-void MapView::drawTankWater(SDL_Renderer * renderer, float center_x, float center_y) {
-  if (this->tank_water_tiles.empty()) {
-    return;
-  }
+// One tile diamond of the tank water surface at its tank's level, drawn
+// translucent like the original's translucent water so the basin floor
+// and the submerged walls show through. Tanks aligned to full tiles tile
+// the surface with top alone; the half diamond tope/topn/tops/topw
+// fringe pieces are for half tile aligned tanks, which med_kids does not
+// have.
+void MapView::drawWaterTile(SDL_Renderer * renderer, const WaterDraw &draw, float center_x, float center_y) {
   Animation * top = this->resource_manager->getAnimation("water/salt/top/top");
   if (top == nullptr) {
     return;
   }
-  for (const auto &entry : this->tank_water_tiles) {
-    float tile_x = (float) (int) (entry.first >> 32);
-    float tile_y = (float) (int) (uint32_t) entry.first;
-    float world_x;
-    float world_y;
-    this->tileToWorld(tile_x + 0.5f, tile_y + 0.5f, &world_x, &world_y);
-    world_y -= entry.second * HEIGHT_STEP;
-    float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
-    float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
-    float box_x0 = 0.0f;
-    float box_y0 = 0.0f;
-    float box_width = 0.0f;
-    float box_height = 0.0f;
-    if (!top->getBox(&box_x0, &box_y0, &box_width, &box_height)) {
-      continue;
-    }
-    SDL_FRect destination = {
-      (float) SDL_lroundf(screen_x + box_x0 * this->zoom),
-      (float) SDL_lroundf(screen_y + box_y0 * this->zoom),
-      (float) SDL_lroundf(box_width * this->zoom),
-      (float) SDL_lroundf(box_height * this->zoom),
-    };
-    top->drawByKey(renderer, &destination, "N", false, 128);
+  float world_x;
+  float world_y;
+  this->tileToWorld(draw.tile_x + 0.5f, draw.tile_y + 0.5f, &world_x, &world_y);
+  world_y -= draw.level * HEIGHT_STEP;
+  float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
+  float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
+  float box_x0 = 0.0f;
+  float box_y0 = 0.0f;
+  float box_width = 0.0f;
+  float box_height = 0.0f;
+  if (!top->getBox(&box_x0, &box_y0, &box_width, &box_height)) {
+    return;
   }
+  SDL_FRect destination = {
+    (float) SDL_lroundf(screen_x + box_x0 * this->zoom),
+    (float) SDL_lroundf(screen_y + box_y0 * this->zoom),
+    (float) SDL_lroundf(box_width * this->zoom),
+    (float) SDL_lroundf(box_height * this->zoom),
+  };
+  top->drawByKey(renderer, &destination, "N", false, 128);
 }
 
 // The rotation field steps in increments of 2 per quarter turn, clockwise
@@ -1629,7 +1674,17 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
 }
 
 void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y) {
-  for (const ZooObject * object : this->sorted_objects) {
+  // The tank water surface interleaves with the painter order: each tile's
+  // diamond draws in its own row, over the tile's objects and its near
+  // wall (below the surface in a dug tank) and under everything in front
+  size_t water_index = 0;
+  for (size_t object_index = 0; object_index < this->sorted_objects.size(); object_index++) {
+    const ZooObject * object = this->sorted_objects[object_index];
+    while (water_index < this->water_draws.size() &&
+           this->water_draws[water_index].key <= this->sorted_object_keys[object_index]) {
+      this->drawWaterTile(renderer, this->water_draws[water_index], center_x, center_y);
+      water_index++;
+    }
     // Positions are in 64ths of a tile
     float tile_x = (float) object->x / 64.0f;
     float tile_y = (float) object->y / 64.0f;
@@ -1720,6 +1775,10 @@ void MapView::drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, floa
     } else {
       animation->draw(renderer, &destination);
     }
+  }
+  while (water_index < this->water_draws.size()) {
+    this->drawWaterTile(renderer, this->water_draws[water_index], center_x, center_y);
+    water_index++;
   }
   this->drawSimGuests(renderer, center_x, center_y);
 }

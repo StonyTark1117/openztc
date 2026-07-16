@@ -95,6 +95,28 @@ private:
   // carry a tank wall (bit 0 east +x, 1 south +y, 2 west, 3 north)
   std::unordered_map<uint64_t, float> tank_water_tiles;
   std::unordered_map<uint64_t, int> tank_wall_sides;
+  // Paint order slot of a drawn element: back to front rows of whole
+  // tiles, walls after the objects of their back tile, the water surface
+  // over both
+  struct PaintKey {
+    int row = 0;
+    int column = 0;
+    int phase = 0;
+    bool operator<=(const PaintKey &other) const {
+      if (row != other.row) return row < other.row;
+      if (column != other.column) return column < other.column;
+      return phase <= other.phase;
+    }
+  };
+  // Keys aligned with sorted_objects, and the water tiles in paint order
+  std::vector<PaintKey> sorted_object_keys;
+  struct WaterDraw {
+    PaintKey key;
+    float tile_x = 0.0f;
+    float tile_y = 0.0f;
+    float level = 0.0f;
+  };
+  std::vector<WaterDraw> water_draws;
   std::vector<SimGuest> sim_guests;
   std::vector<SimAnimal> sim_animals;
   int missing_object_art = 0;
@@ -121,7 +143,7 @@ private:
   float terrainBrightness(float gradient_x, float gradient_y);
   void drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y);
   void buildTankWater();
-  void drawTankWater(SDL_Renderer * renderer, float center_x, float center_y);
+  void drawWaterTile(SDL_Renderer * renderer, const WaterDraw &draw, float center_x, float center_y);
   Animation * objectAnimation(const ZooObject * object, std::string &draw_key);
   void buildCornerHeights();
   float cornerHeight(uint32_t x, uint32_t y);
