@@ -90,6 +90,11 @@ private:
   bool registry_loaded = false;
   // Tiles carrying a path, for neighbor based path piece selection
   std::unordered_map<uint64_t, bool> path_tiles;
+  // Tank interiors: tile key to the water level in height steps (the rim
+  // the basin was dug from) and a bitmask of which map sides of the tile
+  // carry a tank wall (bit 0 east +x, 1 south +y, 2 west, 3 north)
+  std::unordered_map<uint64_t, float> tank_water_tiles;
+  std::unordered_map<uint64_t, int> tank_wall_sides;
   std::vector<SimGuest> sim_guests;
   std::vector<SimAnimal> sim_animals;
   int missing_object_art = 0;
@@ -115,6 +120,8 @@ private:
   // there in height steps per tile
   float terrainBrightness(float gradient_x, float gradient_y);
   void drawObjects(SDL_Renderer * renderer, SDL_FRect * window_rect, float center_x, float center_y);
+  void buildTankWater();
+  void drawTankWater(SDL_Renderer * renderer, float center_x, float center_y);
   Animation * objectAnimation(const ZooObject * object, std::string &draw_key);
   void buildCornerHeights();
   float cornerHeight(uint32_t x, uint32_t y);

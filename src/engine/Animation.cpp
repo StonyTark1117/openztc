@@ -83,7 +83,8 @@ bool Animation::getSizeByKey(const std::string &key, float * w, float * h) {
   return false;
 }
 
-void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key, bool mirrored) {
+void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const std::string &key, bool mirrored,
+                          uint8_t alpha) {
   if (!this->textures.contains(key) || this->textures[key].empty()) {
     if (!this->surfaces.contains(key) || this->surfaces[key].empty()) {
       return;
@@ -117,10 +118,14 @@ void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const 
   // the list while the cycle frames carry only the moving pixels, so the
   // background draws first or a building reduces to its animated speck
   if (this->has_background && this->textures[key].back() != nullptr) {
+    SDL_SetTextureAlphaMod(this->textures[key].back(), alpha);
     SDL_RenderTextureRotated(renderer, this->textures[key].back(), NULL, dest_rect, 0.0, NULL, flip);
+    SDL_SetTextureAlphaMod(this->textures[key].back(), 255);
   }
   // West side views of most entity art are the east side ones flipped
+  SDL_SetTextureAlphaMod(this->textures[key][frame], alpha);
   SDL_RenderTextureRotated(renderer, this->textures[key][frame], NULL, dest_rect, 0.0, NULL, flip);
+  SDL_SetTextureAlphaMod(this->textures[key][frame], 255);
 }
 
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {
