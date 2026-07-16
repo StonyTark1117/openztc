@@ -864,10 +864,6 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
       if (texture != nullptr) {
         // Boundary blending draws neighbor textures with vertex alpha
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-        // Point sampling: the diamond UV mapping rarely lands on texel
-        // centers, and the linear filter was washing out the ground
-        // grain (measured: half the original's local contrast on sand)
-        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
         // The original holds its terrain art at 128 texels to the tile:
         // every ground type ships at 128x128 and covers one tile, while
         // water and concrete ship at 256x256 and stretch over two tiles
@@ -878,6 +874,13 @@ void MapView::loadTerrainTextures(SDL_Renderer * renderer) {
         SDL_GetTextureSize(texture, &texture_width, &texture_height);
         int span = (int) SDL_lroundf(texture_width / 128.0f);
         this->terrain_texture_span[type] = SDL_max(span, 1);
+        // Point sampling: the diamond UV mapping rarely lands on texel
+        // centers, and the linear filter was washing out the ground
+        // grain (measured: half the original's local contrast on sand;
+        // linear on the two tile water textures was also tested against
+        // a live deathmtn capture and does not reproduce the original's
+        // lake pattern either)
+        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
         this->terrain_textures[type] = texture;
       }
     }
