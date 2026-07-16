@@ -763,10 +763,6 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   };
   // Whether any of the four tiles meeting at grid corner (cx, cy) has the
   // wanted type
-  auto cornerTouchesType = [&](int cx, int cy, int wanted) -> bool {
-    return typeAt(cx - 1, cy - 1) == wanted || typeAt(cx, cy - 1) == wanted ||
-           typeAt(cx - 1, cy) == wanted || typeAt(cx, cy) == wanted;
-  };
   // How many of the four tiles meeting at a grid corner carry a type. The
   // original weighs a corner by exactly this, so a corner where one tile in
   // four is gray rock is a quarter gray rock.
@@ -852,9 +848,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         bool a_left = ax < bx;
         float left_x = a_left ? ax : bx;
         float left_y_high = a_left ? ay_high : by_high;
-        float right_y_high = a_left ? by_high : ay_high;
         float left_drop = (a_left ? ay_low - ay_high : by_low - by_high);
-        float right_drop = (a_left ? by_low - by_high : ay_low - ay_high);
         // Which way the edge itself runs decides the art, and that is a
         // question about the tile grid rather than about the terrain: ask
         // the corners where they sit with no height on them. Reading it
@@ -875,8 +869,6 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         const char * side = right_base_y > left_base_y ? "l" : "r";
         float step_px = HEIGHT_STEP * this->zoom;
         int left_steps = (int) SDL_lroundf(left_drop / step_px);
-        int right_steps = (int) SDL_lroundf(right_drop / step_px);
-        int both = SDL_min(left_steps, right_steps);
         // Only the level part of a drop is a band. Where a flank slopes, the
         // step it slopes through is a wedge, and fringe.ztd carries one for
         // each way a single flank can lean. Stacking bands to the deeper
@@ -926,19 +918,25 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
           }
         };
         // A sloping high flank takes the top step, a sloping low flank the
-        // bottom one, and the level part in between is bands
-        if (high_tilt > 0) {
-          place("0001");
-        } else if (high_tilt < 0) {
-          place("0010");
+        // bottom one, and the level part in between is bands. Both flanks can
+        // slope at once — a quarter of the cliff edges in the shipped maps do
+        // — and then both wedges are wanted, so the bands are whatever is left
+        // over at the LEFT once the wedges have taken their share. Counting
+        // them as the shallower of the two drops instead over-counted by one
+        // wherever the two slopes cancelled, which is the case that leaves the
+        // drop even but the face leaning.
+        const char * high_wedge = high_tilt > 0 ? "0001" : (high_tilt < 0 ? "0010" : nullptr);
+        const char * low_wedge = low_tilt > 0 ? "0110" : (low_tilt < 0 ? "1011" : nullptr);
+        int wedge_left_steps = (high_tilt < 0 ? 1 : 0) + (low_tilt > 0 ? 1 : 0);
+        int bands = SDL_max(left_steps - wedge_left_steps, 0);
+        if (high_wedge != nullptr) {
+          place(high_wedge);
         }
-        for (int step = 0; step < both; step++) {
+        for (int step = 0; step < bands; step++) {
           place("0011");
         }
-        if (low_tilt > 0) {
-          place("0110");
-        } else if (low_tilt < 0) {
-          place("1011");
+        if (low_wedge != nullptr) {
+          place(low_wedge);
         }
       }
 
