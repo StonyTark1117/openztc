@@ -1815,10 +1815,26 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
       std::string base = "animals/" + object->subcategory + "/" + object->code + "/";
       bool in_water = this->isWaterAt((int32_t) object->x, (int32_t) object->y);
       std::vector<std::string> candidates;
+      // The resting state is usually stand, but chimps ship stnd4/stnd2
+      // and moose stndidle instead. Species without female art, like the
+      // crocodiles, draw the females with the male art.
+      std::string male_base = "animals/" + object->subcategory + "/m/";
       if (in_water) {
-        candidates = {base + "swim/swim", base + "surfswim/surfswim", base + "stand/stand"};
+        candidates = {base + "swim/swim", base + "surfswim/surfswim", base + "stand/stand",
+                      base + "stnd4/stnd4", base + "stndidle/stndidle"};
+        if (object->code != "m") {
+          candidates.push_back(male_base + "swim/swim");
+          candidates.push_back(male_base + "surfswim/surfswim");
+          candidates.push_back(male_base + "stand/stand");
+        }
       } else {
-        candidates = {base + "stand/stand", base + "surfswim/surfswim"};
+        candidates = {base + "stand/stand", base + "stnd4/stnd4", base + "stnd2/stnd2",
+                      base + "stndidle/stndidle", base + "surfswim/surfswim"};
+        if (object->code != "m") {
+          candidates.push_back(male_base + "stand/stand");
+          candidates.push_back(male_base + "stnd4/stnd4");
+          candidates.push_back(male_base + "stndidle/stndidle");
+        }
       }
       return this->firstAnimation(candidates, base + (in_water ? "#water" : "#land"));
     } else if (object->category == "guests") {
