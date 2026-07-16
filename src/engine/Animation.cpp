@@ -112,13 +112,15 @@ void Animation::drawByKey(SDL_Renderer * renderer, SDL_FRect * dest_rect, const 
   if (this->textures[key][frame] == nullptr) {
     frame = 0;
   }
-  if (mirrored) {
-    // West side views of most entity art are the east side ones flipped
-    SDL_RenderTextureRotated(renderer, this->textures[key][frame], NULL, dest_rect, 0.0, NULL,
-                             SDL_FLIP_HORIZONTAL);
-  } else {
-    SDL_RenderTexture(renderer, this->textures[key][frame], NULL, dest_rect);
+  SDL_FlipMode flip = mirrored ? SDL_FLIP_HORIZONTAL : SDL_FLIP_NONE;
+  // FATZ art keeps the static image in a background frame at the end of
+  // the list while the cycle frames carry only the moving pixels, so the
+  // background draws first or a building reduces to its animated speck
+  if (this->has_background && this->textures[key].back() != nullptr) {
+    SDL_RenderTextureRotated(renderer, this->textures[key].back(), NULL, dest_rect, 0.0, NULL, flip);
   }
+  // West side views of most entity art are the east side ones flipped
+  SDL_RenderTextureRotated(renderer, this->textures[key][frame], NULL, dest_rect, 0.0, NULL, flip);
 }
 
 void Animation::draw(SDL_Renderer *renderer,  SDL_FRect * dest_rect, CompassDirection direction) {
@@ -475,5 +477,8 @@ void Animation::loadSurfaces(std::string direction_string, AnimationData * data)
     }
   }
   assert(!this->surfaces[direction_string].empty());
+  if (data->owns_pallet) {
+    free(data->pallet);
+  }
   free(data);
 }
