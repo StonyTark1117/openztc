@@ -448,6 +448,11 @@ void Animation::loadSurfaces(std::string direction_string, AnimationData * data)
     SDL_Log("Animation %s has no pallet, skipping", direction_string.c_str());
     return;
   }
+  if (data->width <= 0 || data->height <= 0) {
+    // Deliberately empty art, like the post-free middle band of the tank
+    // glass frame kit, whose ani box is all zeros
+    return;
+  }
   this->frame_time_in_ms = data->frame_time_in_ms;
   this->has_background = data->has_background;
 

@@ -1408,6 +1408,69 @@ void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object
       }
     }
   }
+  if (object->subcategory != "tankwal1" || bands <= 0) {
+    return;
+  }
+  // The dark frame over the glass comes from the tank1 kit: a rail band
+  // at the bottom and top with the post-only band between, and the post
+  // sits on whichever end the wall's run stops at (lcr left, rcr right,
+  // col both, mid neither)
+  int side_of_far = 0;
+  if (near_x > far_x) {
+    side_of_far = 0;
+  } else if (near_y > far_y) {
+    side_of_far = 1;
+  } else if (near_x < far_x) {
+    side_of_far = 2;
+  } else {
+    side_of_far = 3;
+  }
+  int run_dx = y_run ? 0 : 1;
+  int run_dy = y_run ? 1 : 0;
+  auto runContinues = [this, side_of_far](int x, int y) {
+    auto found = this->tank_wall_sides.find(((uint64_t) (uint32_t) x << 32) | (uint32_t) y);
+    return found != this->tank_wall_sides.end() && (found->second & (1 << side_of_far)) != 0;
+  };
+  bool continues_positive = runContinues(far_x + run_dx, far_y + run_dy);
+  bool continues_negative = runContinues(far_x - run_dx, far_y - run_dy);
+  // Screen left and right along the run
+  float positive_world_x;
+  this->tileToWorld((float) far_x + run_dx + 0.5f, (float) far_y + run_dy + 0.5f, &positive_world_x, &unused);
+  bool positive_is_right = positive_world_x > far_world_x;
+  bool continues_right = positive_is_right ? continues_positive : continues_negative;
+  bool continues_left = positive_is_right ? continues_negative : continues_positive;
+  const char * position = continues_left ? (continues_right ? "mid" : "rcr")
+                                         : (continues_right ? "lcr" : "col");
+  std::string view = this->rotationDirection(object->rotation);
+  // The rounded wall position is the edge midpoint the frame anchors at
+  float mid_world_x;
+  float mid_world_y;
+  this->tileToWorld(tile_x, tile_y, &mid_world_x, &mid_world_y);
+  float frame_x = (mid_world_x - this->camera_x) * this->zoom + center_x;
+  for (int band = 0; band < bands; band++) {
+    const char * band_name = bands == 1 ? "low" : band == 0 ? "bot" : band == bands - 1 ? "top" : "mid";
+    Animation * frame = this->resource_manager->getAnimation(
+        std::string("fences/tank1/f/") + position + band_name + "/" + position + band_name);
+    if (frame == nullptr) {
+      continue;
+    }
+    float band_world_y = mid_world_y - (start + (float) band) * HEIGHT_STEP;
+    float frame_y = (band_world_y - this->camera_y) * this->zoom + center_y;
+    float box_x0 = 0.0f;
+    float box_y0 = 0.0f;
+    float box_width = 0.0f;
+    float box_height = 0.0f;
+    if (!frame->getBox(&box_x0, &box_y0, &box_width, &box_height)) {
+      continue;
+    }
+    SDL_FRect destination = {
+      (float) SDL_lroundf(frame_x + box_x0 * this->zoom),
+      (float) SDL_lroundf(frame_y + box_y0 * this->zoom),
+      (float) SDL_lroundf(box_width * this->zoom),
+      (float) SDL_lroundf(box_height * this->zoom),
+    };
+    frame->drawByKey(renderer, &destination, view);
+  }
 }
 
 // One tile diamond of the tank water surface at its tank's level, drawn
