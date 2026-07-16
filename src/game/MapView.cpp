@@ -877,26 +877,68 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         int left_steps = (int) SDL_lroundf(left_drop / step_px);
         int right_steps = (int) SDL_lroundf(right_drop / step_px);
         int both = SDL_min(left_steps, right_steps);
-        // The band art of one step, stacked down the shared part of the
-        // drop, then the wedge art for the corner that drops further
-        float top_y = SDL_min(left_y_high, right_y_high);
-        for (int step = 0; step < both; step++) {
-          FringeDraw draw;
-          draw.name = std::string(side) + "0011";
-          draw.rect = {left_x, top_y + (float) step * step_px, 32.0f * this->zoom,
-                       64.0f * this->zoom};
-          fringe_draws.push_back(draw);
+        // Only the level part of a drop is a band. Where a flank slopes, the
+        // step it slopes through is a wedge, and fringe.ztd carries one for
+        // each way a single flank can lean. Stacking bands to the deeper
+        // corner instead left the wedge's triangle unpainted, which showed
+        // through as black.
+        //
+        // Each piece carries its art at its own height inside the 64 pixel
+        // canvas, so they cannot share one top: a piece is placed by lining
+        // its own high edge up with where the face has got to, and it then
+        // advances that by however many steps it spans at the left.
+        struct FringePiece {
+          const char * digits;
+          int left_steps;
+          float art_top_r;
+          float art_top_l;
+        };
+        // The l art sits a pixel lower in its canvas than a clean mirror of
+        // the r art would, so its offsets are taken from where the band has
+        // always been placed rather than from the measured pixel.
+        static const FringePiece pieces[] = {
+          {"0011", 1, 16.0f, 0.0f},   // both flanks level: the band
+          {"0001", 0, 31.0f, 15.0f},  // high flank rises to the right
+          {"0010", 1, 16.0f, 0.0f},   // high flank falls to the right
+          {"0110", 1, 16.0f, 0.0f},   // low flank rises to the right
+          {"1011", 0, 31.0f, 15.0f},  // low flank falls to the right
+        };
+        float high_left = a_left ? high_a : high_b;
+        float high_right = a_left ? high_b : high_a;
+        float low_left = a_left ? low_a : low_b;
+        float low_right = a_left ? low_b : low_a;
+        int high_tilt = (int) SDL_lroundf(high_right - high_left);
+        int low_tilt = (int) SDL_lroundf(low_right - low_left);
+        bool right_side = side[0] == 'r';
+        float cursor = left_y_high;
+        auto place = [&](const char * digits) {
+          for (const FringePiece &piece : pieces) {
+            if (SDL_strcmp(piece.digits, digits) != 0) {
+              continue;
+            }
+            float art_top = (right_side ? piece.art_top_r : piece.art_top_l) * this->zoom;
+            FringeDraw draw;
+            draw.name = std::string(side) + digits;
+            draw.rect = {left_x, cursor - art_top, 32.0f * this->zoom, 64.0f * this->zoom};
+            fringe_draws.push_back(draw);
+            cursor += (float) piece.left_steps * step_px;
+            return;
+          }
+        };
+        // A sloping high flank takes the top step, a sloping low flank the
+        // bottom one, and the level part in between is bands
+        if (high_tilt > 0) {
+          place("0001");
+        } else if (high_tilt < 0) {
+          place("0010");
         }
-        // Where one corner drops further than the other the face is a
-        // wedge; the original has sprites for those, but stacking the
-        // band to the deeper corner covers the same ground and the tile
-        // tops drawn afterwards trim the overhang
-        for (int step = both; step < SDL_max(left_steps, right_steps); step++) {
-          FringeDraw draw;
-          draw.name = std::string(side) + "0011";
-          draw.rect = {left_x, top_y + (float) step * step_px, 32.0f * this->zoom,
-                       64.0f * this->zoom};
-          fringe_draws.push_back(draw);
+        for (int step = 0; step < both; step++) {
+          place("0011");
+        }
+        if (low_tilt > 0) {
+          place("0110");
+        } else if (low_tilt < 0) {
+          place("1011");
         }
       }
 
