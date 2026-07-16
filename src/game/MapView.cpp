@@ -1775,6 +1775,9 @@ std::pair<std::string, int> MapView::objectColorRep(const ZooObject * object) {
 Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw_key) {
   std::string cache_key;
   std::string animation_path;
+  // A per-instance color replacement, like the guests' four part ramps
+  std::string replacement_pallets;
+  int replacement_start = 0;
   if (object->category == "fences") {
     // Fence pieces sit on tile edges at half tile positions: 0 is the NE
     // facing piece of an x axis run, 6 the SE facing piece of a y axis
@@ -1923,6 +1926,41 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
         body = "lsgguest";
       }
       animation_path = "guests/" + body + "/" + body;
+      // The record's four color choices recolor the shirt, pants or
+      // skirt, hair and skin ramps that sit back to back after the 192
+      // fixed colors of the guest pallets
+      if (object->guest_colors[0] != 255) {
+        if (this->guest_part_pallets.empty()) {
+          IniReader * guests_reader = this->resource_manager->getIniReader("guests/guests.ai");
+          if (guests_reader != nullptr) {
+            for (const char * part : {"cr_shirt", "cr_pants", "cr_skirt", "cr_hair", "cr_skin"}) {
+              this->guest_part_pallets[part] = guests_reader->getList(part, "pal");
+            }
+            delete guests_reader;
+          }
+          // Poison against re-reading every frame when the ai is absent
+          this->guest_part_pallets["cr_shirt"];
+        }
+        bool skirt = object->subcategory == "woman" || object->subcategory == "girl";
+        const char * part_names[4] = {"cr_shirt", skirt ? "cr_skirt" : "cr_pants", "cr_hair", "cr_skin"};
+        std::string composed;
+        bool all_parts_known = true;
+        for (int part = 0; part < 4; part++) {
+          std::vector<std::string> &choices = this->guest_part_pallets[part_names[part]];
+          if (object->guest_colors[part] >= choices.size()) {
+            all_parts_known = false;
+            break;
+          }
+          if (part > 0) {
+            composed += ";";
+          }
+          composed += choices[object->guest_colors[part]];
+        }
+        if (all_parts_known) {
+          replacement_pallets = composed;
+          replacement_start = 192;
+        }
+      }
     } else {
       std::string kind = object->category == "keeper" ? "keepr" : object->category == "maint" ? "maint" : "guide";
       std::string gender = object->code == "f" ? "f" : "m";
@@ -1933,7 +1971,7 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     // polar bears (facing 6 shows the SW view, 7 the W view)
     static const char * entity_directions[8] = {"SE", "S", "SW", "W", "NW", "N", "NE", "E"};
     draw_key = entity_directions[(object->rotation + 14 - 2 * (uint32_t) this->orientation) % 8];
-    cache_key = animation_path;
+    cache_key = animation_path + (replacement_pallets.empty() ? "" : ":" + replacement_pallets);
   } else {
     // Tank walls carry a piece code like fences do, plain objects face
     // where their rotation points
@@ -1978,7 +2016,7 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
   if (this->object_animations.contains(cache_key)) {
     return this->object_animations[cache_key];
   }
-  Animation * animation = this->resource_manager->getAnimation(animation_path);
+  Animation * animation = this->resource_manager->getAnimation(animation_path, replacement_pallets, replacement_start);
   this->object_animations[cache_key] = animation;
   if (animation == nullptr) {
     this->missing_object_art++;

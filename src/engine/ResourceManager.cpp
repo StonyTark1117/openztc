@@ -241,27 +241,45 @@ Animation *ResourceManager::getAnimation(const std::string &file_name, const std
   std::string cache_key = file_name;
   if (!replacement_pallet_name.empty()) {
     std::string pallet_name = replacement_pallet_name;
-    size_t semicolon = pallet_name.find(';');
-    if (semicolon == std::string::npos) {
+    if (pallet_name.find(';') == std::string::npos) {
       replacement_pallet = this->pallet_manager.getPallet(pallet_name);
     } else {
-      // Art with two recolorable ramps names both palettes separated by a
-      // semicolon. The ramps sit back to back in the art's pallet (232
-      // fixed + 16 + 8 fills the 256 exactly on the scn08 stands), so a
-      // composed replacement carries both after one sentinel.
-      std::string first_name = pallet_name.substr(0, semicolon);
-      std::string second_name = pallet_name.substr(semicolon + 1);
-      Pallet * first = this->pallet_manager.getPallet(first_name);
-      Pallet * second = this->pallet_manager.getPallet(second_name);
-      if (first != nullptr) {
-        Pallet &composed = this->composed_pallets[pallet_name];
-        composed = *first;
-        if (second != nullptr) {
-          for (uint32_t i = 1; i < second->color_count && composed.color_count < 256; i++) {
-            composed.colors[composed.color_count++] = second->colors[i];
+      // Art with several recolorable ramps names the palettes separated
+      // by semicolons: two on the scn08 stands (232 fixed + 16 + 8), four
+      // on the guests (192 fixed + shirt + pants + hair + skin). The
+      // ramps sit back to back in the art's pallet, so one composed
+      // replacement carries them all after one sentinel.
+      auto found = this->composed_pallets.find(pallet_name);
+      if (found != this->composed_pallets.end()) {
+        replacement_pallet = &found->second;
+      } else {
+        Pallet composed;
+        composed.color_count = 0;
+        bool first = true;
+        size_t start = 0;
+        bool valid = true;
+        while (start <= pallet_name.size()) {
+          size_t end = pallet_name.find(';', start);
+          std::string part = pallet_name.substr(start, end == std::string::npos ? std::string::npos : end - start);
+          Pallet * ramp = this->pallet_manager.getPallet(part);
+          if (ramp == nullptr) {
+            valid = false;
+            break;
           }
+          for (uint32_t i = first ? 0 : 1; i < ramp->color_count && composed.color_count < 256; i++) {
+            composed.colors[composed.color_count++] = ramp->colors[i];
+          }
+          first = false;
+          if (end == std::string::npos) {
+            break;
+          }
+          start = end + 1;
         }
-        replacement_pallet = &composed;
+        if (valid) {
+          Pallet &stored = this->composed_pallets[pallet_name];
+          stored = composed;
+          replacement_pallet = &stored;
+        }
       }
     }
     if (replacement_pallet != nullptr) {

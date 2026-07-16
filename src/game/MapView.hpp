@@ -172,6 +172,10 @@ private:
   // The shared building recolor palettes from building.ai's [cr_part1],
   // indexed by the color byte the saved records carry
   std::vector<std::string> shared_color_pallets;
+  // The guest part palette lists from guests/guests.ai (cr_shirt,
+  // cr_pants, cr_skirt, cr_hair, cr_skin), indexed by the four color
+  // choices each guest record carries
+  std::unordered_map<std::string, std::vector<std::string>> guest_part_pallets;
 };
 
 #endif // MAP_VIEW_HPP

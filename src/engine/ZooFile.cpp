@@ -317,8 +317,15 @@ void ZooFile::parseObjects() {
     object.elevation = 0;
     object.rotation = 0;
     object.color = 255;
+    memset(object.guest_colors, 255, sizeof(object.guest_colors));
     if (isEntityCategory(object.category)) {
       findEntityPosition(data + position, remaining, this->width, object);
+      // Guests also carry four color choices (shirt, pants or skirt,
+      // hair, skin) somewhere in their state, but the guest record has a
+      // variable length interior — 523 to 856 bytes with single byte
+      // flags shifting the field stream — so the offsets cannot be fixed
+      // like the buildings' color. The renderer falls back to the base
+      // ramps until the record walker exists.
     } else if (remaining >= 20) {
       object.x = readUint32(data, position + 4);
       object.y = readUint32(data, position + 8);
