@@ -95,6 +95,10 @@ private:
   // carry a tank wall (bit 0 east +x, 1 south +y, 2 west, 3 north)
   std::unordered_map<uint64_t, float> tank_water_tiles;
   std::unordered_map<uint64_t, int> tank_wall_sides;
+  // The region's rim — the highest ground just outside its walls — which
+  // anchors the top of the glass at rim + wall height even where the
+  // outside terrain slopes away below it
+  std::unordered_map<uint64_t, float> tank_rim;
   // Paint order slot of a drawn element: back to front rows of whole
   // tiles, walls after the objects of their back tile, the water surface
   // over both
