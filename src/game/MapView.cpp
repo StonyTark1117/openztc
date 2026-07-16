@@ -1484,8 +1484,13 @@ void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object
   float frame_x = (mid_world_x - this->camera_x) * this->zoom + center_x;
   for (int band = 0; band < bands; band++) {
     const char * band_name = bands == 1 ? "low" : band == 0 ? "bot" : band == bands - 1 ? "top" : "mid";
-    Animation * frame = this->resource_manager->getAnimation(
-        std::string("fences/tank1/f/") + position + band_name + "/" + position + band_name);
+    // The kit ships no collow piece, so an isolated one step wall borrows
+    // the middle low band
+    std::string piece = std::string(position) + band_name;
+    if (piece == "collow") {
+      piece = "midlow";
+    }
+    Animation * frame = this->resource_manager->getAnimation("fences/tank1/f/" + piece + "/" + piece);
     if (frame == nullptr) {
       continue;
     }
