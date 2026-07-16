@@ -13,12 +13,24 @@ Current state:
   the custom `.ani` graphics format, including expansion pack overrides.
 - Complete main menu: credits, scenario selection (story, objectives,
   pictures) and freeform map selection (descriptions, previews, starting
-  cash and difficulty).
-- The game's own cursors, fonts, music and localized strings.
+  cash and difficulty), plus a built-in mod manager with loadouts behind
+  the "Get New Zoo Tycoon Items" button.
+- The map view renders every shipped map — terrain with the original's
+  lighting and blend rules, cliffs, water, paths and fences on slopes,
+  buildings with their color replacements, Marine Mania tank water — and
+  is verified against the original running under Wine to ±1px geometry
+  and ±2.2% color medians, at all four camera rotations and both zoom
+  levels. [docs/RENDERING.md](docs/RENDERING.md) documents every verified
+  rule.
+- A fixed-tick simulation: money moves, guests arrive and walk the paths,
+  animals wander and swim in their exhibits.
+- The `.zoo` reader parses all shipped maps and saves; the writer
+  round-trips every one of them byte identical.
 
-Gameplay does not exist yet. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
-plan, including the `.zoo` save format, larger custom maps and the
-multiplayer-ready simulation architecture.
+What is missing is interaction — build tools, placement, prices: the zoo
+runs but cannot yet be played. See [docs/ROADMAP.md](docs/ROADMAP.md) for
+the plan, including larger custom maps and the multiplayer-ready
+simulation architecture.
 
 ## Building
 
@@ -43,15 +55,16 @@ The bundled Aileron fonts are CC0. The icon uses
 
 # Third Party Licenses
 
-zt1-engine uses external libraries:
-- SDL2
-- SDL2_image
-- SDL2_mixer
-- SDL2_ttf
+OpenZTC uses external libraries (vendored, statically linked):
+- SDL3
+- SDL3_image
+- SDL3_mixer
+- SDL3_ttf
 - FreeType2
 - pe-resource-loader
 - libzip
 - libz
+- doctest (tests only)
 
 The icon was made using [a picture from Magda Ehlers from Pexels](https://www.pexels.com/photo/zebra-s-eye-760958/).
 

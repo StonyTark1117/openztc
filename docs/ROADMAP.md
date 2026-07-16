@@ -9,8 +9,23 @@ The menu shell is complete and verified against the real Complete Collection
 data: resource pipeline (ZTD archives, PE resources, palettes, the custom
 `.ani` graphics format, TGA/BMP quirks), a data-driven UI system with ten
 element types, credits, scenario selection and freeform map selection, game
-cursors, deterministic resource loading and an animation cache. What does not
-exist yet is the game: no map view, no simulation, no saving.
+cursors, deterministic resource loading and an animation cache.
+
+The game exists now. The map view renders every shipped map — terrain with
+the original's lighting rig and blend rules, cliffs, water, paths, fences on
+slopes, buildings with their color replacements, Marine Mania tank water
+with glass walls — and has been verified against captures of the original
+running under Wine to ±1px geometry and ±2.2% color medians, at all four
+camera rotations and both zoom levels (docs/RENDERING.md holds every
+verified rule with the measurement that pinned it down). A fixed-tick
+simulation moves money, spawns guests that walk the paths and animals that
+wander and swim in their exhibits. The `.zoo` reader parses all shipped
+maps and saves, and the writer round-trips every one of them byte
+identical — including saves the original game wrote this month. The mod
+manager is live behind the "Get New Zoo Tycoon Items" button, with
+loadouts and no-restart apply. What does not exist yet is interaction:
+build tools, placement, prices — the game plays itself but cannot yet be
+played.
 
 ## Language: staying with C++20
 
@@ -83,23 +98,34 @@ cost almost nothing now and are near-impossible to retrofit.
 
 ## The `.zoo` save format
 
-Reconnaissance on the shipped maps plus community research (Gymnasiast's
-format notes, the 233×233 experiment) gives us a strong starting point:
+Largely decoded now, well past the community notes we started from:
 
 - Magic `TZFB` + a variant byte, version, language id, campaign type,
-  map X/Y dimensions.
+  map X/Y dimensions. Header sizes vary per variant; the parser anchors
+  on the first valid object record rather than trusting a fixed size.
 - Exhibits: count-prefixed records with name, entrance, rotation and six
   float money fields; tank/show-tank variants flagged in an extension field.
-- Terrain: a flat stream of `X*Y` 10-byte elements — 32-bit height, a shape
-  bitfield byte (raised corners), a terrain-type byte, four unknown bytes.
-- Objects: category/name strings, position in 1/64-tile units, rotation,
-  age, instance name.
-- All strings are 32-bit-length-prefixed, no terminator. Later sections
-  (money, research state) are still undocumented.
+- Terrain: a flat stream of `X*Y` 10-byte tiles, every byte decoded —
+  height `i32` in whole steps (the NW corner's), a shape byte (2-bit
+  corner offsets above `height - (shape & 3)`), the type byte, an edges
+  byte (2 bits per edge: flat/sloped/cliff-up/cliff-down — derived data
+  the original renders from without recomputing; zero it and the original
+  draws a black void, so writers must maintain it), and 3 zero pads.
+- Objects: three length-prefixed strings (category, subcategory, code),
+  then a length and that many bytes — position in 1/64-tile units,
+  elevation in 1/16 steps, rotation, an id, the display name, and typed
+  state. Buildings keep their recolor choice 43 bytes into the state (an
+  index into building.ai's shared palette list). Entities are variable
+  length inside and are position-scanned; the guests' four color choices
+  (shirt, pants or skirt, hair, skin) live in that undecoded interior.
+- All strings are 32-bit-length-prefixed, no terminator.
 
-Unknowns are workable: we run the original game under Wine on the same
-machine, so we can make one change in the real game, save, and diff the
-bytes. That loop is our reverse-engineering engine.
+The reverse-engineering loop that got us here: run the original under
+Wine, make one change, save, diff the bytes. Recoloring one hot dog stand
+is how the building color field fell. The reader parses all ~100 shipped
+maps and saves, and `serialize()` round-trips every one byte identical.
+`dumpzoo` prints headers, terrain grids, exhibits, objects and colors,
+and `--roundtrip` verifies the writer.
 
 ## Relationship to other projects
 
@@ -113,7 +139,13 @@ bytes. That loop is our reverse-engineering engine.
 ## Milestones
 
 Each milestone has an acceptance test. A milestone is done when its test
-passes, not before.
+passes, not before. Status as of July 2026: milestones 1–4 are done with
+their acceptance met (milestone 3/4's "recognizably the same" bar was
+left far behind — the map view is verified to ±1px against the original
+across seven scenes, four camera rotations and both zoom levels);
+milestone 5 is partially done (money ticks, guests walk, animals wander
+and swim); milestone 6 is the current frontier. Save round-tripping from
+"Later" is done. The mod manager section is fully delivered.
 
 ### 1. Hardening (before any gameplay code)
 
@@ -191,36 +223,55 @@ overrides whom, and `openztc-loadout-<name>.txt` files in the mods
 directory (same format as the state file, create one by copying it)
 appear in the list where Enable / Disable applies them.
 
-Still planned, taking inspiration from
-[ModZT](https://github.com/songstormstudios/modzt) (MIT):
-
-- Creating and editing loadouts in the screen itself.
-- Apply changes without restarting (resource map reload).
+Both of the remaining items — creating and editing loadouts in the
+screen itself, and applying changes without a restart via a resource map
+reload — are implemented. The screen is feature complete.
 
 ### Aquarium completeness (Marine Mania)
 
-Aquatic exhibits are the furthest from vanilla right now. A tank in the
-original is a filled body of water: a translucent surface at the fill
-level, animals swimming under and breaking it, show tanks with stands
-and performances. Ours renders the dry basin — tank walls, a dug-out
-floor with the decorations — and since the swim-state work the animals
-at least appear via their surface-swim art.
+The tank water renders now, and the acceptance bar — med_kids' dolphin
+show tank and hammerhead tank side by side with the original reading as
+the same filled aquarium — is met (clean water within 2/255 per channel
+of the original's captures). What we learned getting there: nothing in
+the save stores a fill level. The wall art is three stacked glass bands
+of two steps each, and a tank fills to the top of its six-step walls or
+back up to the rim it was dug from, whichever is higher. The translucent
+surface draws in painter order per tile; walls rising above ground show
+the water column through their glass plus the dark frame kit; transient
+edge ripples are re-placed at runtime because their records carry no
+position.
 
-What vanilla has that we do not yet:
+Still open, now smaller:
 
-- The tank water itself: fill level (stored in the tank exhibit
-  records; show tanks differ), the translucent surface, and the tinted
-  underwater rendering of everything below it.
 - Sub/surface animal states driven by depth: `subswim` under water,
-  `surfswim` breaking the surface, dive and rise transitions.
+  dive and rise transitions (surface swim works).
 - Tank equipment behavior: filters, show tank stands, the show
   schedule from the tank records.
-- Guests watching through tank walls / from bleachers.
-
-*Acceptance*: the med_kids dolphin show tank and hammerhead tank,
-side by side with the original, read as the same filled aquarium.
+- Guests watching through tank walls / from bleachers (they gather on
+  the bleachers already via the simulation records).
+- Water quality scum variants and fresh-vs-salt selection (no vanilla
+  test case found in any shipped map).
 
 ### 7. Later
 
-- Save writing (round-trip a vanilla save), oversized custom maps,
-  multiplayer transport on the GameAction bus.
+- Oversized custom maps, multiplayer transport on the GameAction bus.
+  (Save writing is done: every shipped map and save round-trips byte
+  identical, including saves written by the original this month.)
+
+## How we verify against the original
+
+The methodology that produced the ±1px/±2.2% numbers, so it can be
+repeated: the original runs under Wine on the same machine. Pause it —
+the simulation freezes — save, and screenshot; the save and the capture
+now describe the same instant, entities included. Render that save,
+solve the camera by template-matching a landmark, and compare. The
+camera-rotate button and both zoom levels multiply one frozen save into
+ten comparable views. Hard-won metric rules live in docs/RENDERING.md
+and the git history; the two worth repeating here are that colour is
+compared as the median of per-cell ratios (never a ratio of means), and
+that a 1px alignment error on dithered ground costs ~7 MAD, so global
+shifts get re-searched before concluding anything is worse. The one
+thing this loop cannot reach is the original's per-tile texture-placement
+seed; its output is statistically identical to ours and matching it
+per-pixel would need disassembly, which is out of scope for a clean-room
+project.
