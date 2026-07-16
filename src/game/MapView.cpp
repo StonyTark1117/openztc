@@ -965,7 +965,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       if (typeAt(nx, ny) != wanted) {
         continue;
       }
-      if (SDL_fabsf(cornerClaim(nx, ny, cx, cy) - claim) < 0.5f) {
+      if (SDL_fabsf(cornerClaim(nx, ny, cx, cy) - claim) < 1.5f) {
         count++;
       }
     }
