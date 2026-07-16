@@ -6,7 +6,8 @@
 #include "ZtdFile.hpp"
 #include "Utils.hpp"
 
-Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::string &ztd_file, const std::string &file_name) {
+Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::string &ztd_file, const std::string &file_name,
+                                  const Pallet * replacement_pallet, int replacement_start) {
   IniReader * ini_reader = ZtdFile::getIniReader(ztd_file, file_name);
   if (ini_reader == nullptr) {
     return nullptr;
@@ -18,7 +19,8 @@ Animation * AniFile::getAnimation(PalletManager * pallet_manager, const std::str
   std::unordered_map<std::string, AnimationData *> * animations = new std::unordered_map<std::string, AnimationData *>;
   std::string directory = AniFile::getAnimationDirectory(ini_reader);
   for (std::string direction : ini_reader->getList("animation", "animation")) {
-    AnimationData * data = AniFile::loadAnimationData(pallet_manager, ztd_file, directory + "/" + direction);
+    AnimationData * data = AniFile::loadAnimationData(pallet_manager, ztd_file, directory + "/" + direction,
+                                                      replacement_pallet, replacement_start);
     if (data == nullptr) {
       continue;
     }
@@ -58,7 +60,8 @@ std::string AniFile::getAnimationDirectory(IniReader * ini_reader) {
   return directory;
 }
 
-AnimationData * AniFile::loadAnimationData(PalletManager * pallet_manager, const std::string &ztd_file, const std::string &file_name) {
+AnimationData * AniFile::loadAnimationData(PalletManager * pallet_manager, const std::string &ztd_file, const std::string &file_name,
+                                           const Pallet * replacement_pallet, int replacement_start) {
   #ifdef DEBUG
     SDL_Log("Loading %s from %s", file_name.c_str(), ztd_file.c_str());
   #endif
@@ -97,6 +100,20 @@ AnimationData * AniFile::loadAnimationData(PalletManager * pallet_manager, const
   char * palette_file_name = (char *) calloc(palette_file_name_length, sizeof(char));
   SDL_ReadIO(rw, palette_file_name, (size_t) palette_file_name_length);
   animation_data->pallet = pallet_manager->getPallet(palette_file_name);
+  if (replacement_pallet != nullptr && animation_data->pallet != nullptr) {
+    // Color replaced art keeps its recolorable ramp at the top of the
+    // pallet; the chosen 16 color ramp overwrites it entry for entry
+    Pallet * recolored = (Pallet *) malloc(sizeof(Pallet));
+    *recolored = *animation_data->pallet;
+    for (uint32_t i = 0; i + 1 < replacement_pallet->color_count; i++) {
+      uint32_t target = (uint32_t) replacement_start + i;
+      if (target < recolored->color_count) {
+        recolored->colors[target] = replacement_pallet->colors[i + 1];
+      }
+    }
+    animation_data->pallet = recolored;
+    animation_data->owns_pallet = 1;
+  }
 
   // Continue reading animation data
   SDL_ReadU32LE(rw, &animation_data->frame_count);

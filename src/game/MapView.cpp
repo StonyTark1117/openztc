@@ -1230,6 +1230,38 @@ std::string MapView::objectArtPath(const ZooObject * object) {
   return result;
 }
 
+// Buildings with cIsColorReplaced art keep 16 recolorable entries at the
+// top of their pallet, after the [cr_color] ncolors fixed ones. The ai's
+// [colorrep] block names the default replacement ramp; without it the base
+// art draws in the neutral gray it ships with, which the original never
+// shows (verified against med_kids' sub shop, lime by default).
+std::pair<std::string, int> MapView::objectColorRep(const ZooObject * object) {
+  if (this->color_replacements.contains(object->code)) {
+    return this->color_replacements[object->code];
+  }
+  std::pair<std::string, int> result = {"", 0};
+  if (!this->registry_loaded) {
+    this->loadObjectRegistry();
+  }
+  std::string ai_path = this->registryLookup(object->subcategory, object->code);
+  if (ai_path.empty()) {
+    ai_path = this->registryLookup(object->category, object->subcategory);
+  }
+  if (!ai_path.empty()) {
+    IniReader * ai_reader = this->resource_manager->getIniReader(ai_path);
+    if (ai_reader != nullptr) {
+      std::string default_pallet = ai_reader->get("colorrep", "defaultpal");
+      int fixed_colors = ai_reader->getInt("cr_color", "ncolors");
+      if (!default_pallet.empty() && fixed_colors > 0) {
+        result = {default_pallet, fixed_colors};
+      }
+      delete ai_reader;
+    }
+  }
+  this->color_replacements[object->code] = result;
+  return result;
+}
+
 // Art locations differ per category: plain objects have an idle animation
 // under objects/<code>, fences have one animation per direction and paths
 // have numbered shape pieces picked by which neighbors are also paths
@@ -1403,9 +1435,10 @@ Animation * MapView::objectAnimation(const ZooObject * object, std::string &draw
     if (this->object_animations.contains(cache_key)) {
       return this->object_animations[cache_key];
     }
+    std::pair<std::string, int> color_replacement = this->objectColorRep(object);
     Animation * found = nullptr;
     for (const std::string &candidate : candidates) {
-      found = this->resource_manager->getAnimation(candidate);
+      found = this->resource_manager->getAnimation(candidate, color_replacement.first, color_replacement.second);
       if (found != nullptr) {
         break;
       }

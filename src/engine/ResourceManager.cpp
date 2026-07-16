@@ -225,16 +225,31 @@ IniReader * ResourceManager::getIniReader(const std::string &file_name) {
 }
 
 Animation *ResourceManager::getAnimation(const std::string &file_name) {
+  return this->getAnimation(file_name, "", 0);
+}
+
+Animation *ResourceManager::getAnimation(const std::string &file_name, const std::string &replacement_pallet_name,
+                                         int replacement_start) {
   // Animations are cached and owned by the resource manager, so elements
-  // using the same animation share one instance
-  if (this->animation_map.contains(file_name)) {
-    return this->animation_map[file_name];
+  // using the same animation share one instance. Recolored variants cache
+  // under their own key.
+  const Pallet * replacement_pallet = nullptr;
+  std::string cache_key = file_name;
+  if (!replacement_pallet_name.empty()) {
+    std::string pallet_name = replacement_pallet_name;
+    replacement_pallet = this->pallet_manager.getPallet(pallet_name);
+    if (replacement_pallet != nullptr) {
+      cache_key += ";" + replacement_pallet_name + "@" + std::to_string(replacement_start);
+    }
+  }
+  if (this->animation_map.contains(cache_key)) {
+    return this->animation_map[cache_key];
   }
 
   Animation * animation = nullptr;
   std::string resource_location = getResourceLocation(file_name, false);
   if (!resource_location.empty()) {
-    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, file_name);
+    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, file_name, replacement_pallet, replacement_start);
   } else if (file_name.find(";") != std::string::npos) {
     int semicolon_position = file_name.find(";");
     std::string full_file_name = file_name.substr(0, semicolon_position);
@@ -242,14 +257,14 @@ Animation *ResourceManager::getAnimation(const std::string &file_name) {
       full_file_name += ".ani";
     }
     resource_location = getResourceLocation(full_file_name, false);
-    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name);
+    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name, replacement_pallet, replacement_start);
   } else {
     std::string full_file_name = file_name + ".ani";
     resource_location = getResourceLocation(full_file_name);
-    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name);
+    animation = AniFile::getAnimation(&this->pallet_manager, resource_location, full_file_name, replacement_pallet, replacement_start);
   }
   if (animation != nullptr) {
-    this->animation_map[file_name] = animation;
+    this->animation_map[cache_key] = animation;
   }
   return animation;
 }

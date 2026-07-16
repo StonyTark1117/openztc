@@ -37,6 +37,9 @@ typedef struct {
     uint8_t has_background;
     uint32_t frame_time_in_ms;
     Pallet * pallet;
+    // Set when pallet is a recolored copy rather than the manager's shared
+    // instance, so loadSurfaces frees it with the rest of the data
+    uint8_t owns_pallet;
     uint32_t frame_count;
     AnimationFrameData * frames;
 } AnimationData;

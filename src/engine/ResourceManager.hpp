@@ -44,6 +44,9 @@ public:
   MIX_Audio * getMusic(const std::string &file_name);
   IniReader * getIniReader(const std::string &file_name);
   Animation * getAnimation(const std::string &file_name);
+  // Color replaced art: the named 16 color ramp overwrites the art's own
+  // pallet from replacement_start on, cached separately per ramp
+  Animation * getAnimation(const std::string &file_name, const std::string &replacement_pallet_name, int replacement_start);
   SDL_Texture * getLoadTexture(SDL_Renderer * renderer);
   SDL_Texture * getStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color);
   SDL_Texture * getWrappedStringTexture(SDL_Renderer * renderer, const int font, const std::string &string, SDL_Color color, int wrap_width);

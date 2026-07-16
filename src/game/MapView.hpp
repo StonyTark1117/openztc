@@ -133,6 +133,12 @@ private:
   void loadObjectRegistry();
   std::string registryLookup(const std::string &section, const std::string &key);
   std::string objectArtPath(const ZooObject * object);
+  // The building color replacement from the object's ai file: the default
+  // 16 color ramp and where the recolorable entries start in the art's
+  // pallet. An empty ramp name means the object is not color replaced.
+  std::pair<std::string, int> objectColorRep(const ZooObject * object);
+  // Color replacement per object code, cached including the misses
+  std::unordered_map<std::string, std::pair<std::string, int>> color_replacements;
 };
 
 #endif // MAP_VIEW_HPP
