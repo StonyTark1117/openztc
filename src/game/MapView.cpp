@@ -946,9 +946,30 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
   // How many of the four tiles meeting at a grid corner carry a type. The
   // original weighs a corner by exactly this, so a corner where one tile in
   // four is gray rock is a quarter gray rock.
-  auto cornerTypeCount = [&](int cx, int cy, int wanted) -> int {
-    return (typeAt(cx - 1, cy - 1) == wanted ? 1 : 0) + (typeAt(cx, cy - 1) == wanted ? 1 : 0) +
-           (typeAt(cx - 1, cy) == wanted ? 1 : 0) + (typeAt(cx, cy) == wanted ? 1 : 0);
+  // A neighbour's claim of a shared grid corner, from its own per-tile
+  // corners (they disagree with ours across a cliff)
+  auto cornerClaim = [&](int nx, int ny, int cx, int cy) -> float {
+    int corner = (cx - nx) == 0 ? ((cy - ny) == 0 ? 0 : 3) : ((cy - ny) == 0 ? 1 : 2);
+    return this->tileCornerHeight((uint32_t) nx, (uint32_t) ny, corner);
+  };
+  // Tiles only blend with neighbours they meet at the same height: across
+  // a cliff the original keeps a hard edge (tundra's walled pond stays
+  // saturated to the wall), while gentle shores share their corners and
+  // feather
+  auto cornerTypeCount = [&](int cx, int cy, int wanted, float claim) -> int {
+    static const int neighbor_offsets[4][2] = {{-1, -1}, {0, -1}, {-1, 0}, {0, 0}};
+    int count = 0;
+    for (const auto &offset : neighbor_offsets) {
+      int nx = cx + offset[0];
+      int ny = cy + offset[1];
+      if (typeAt(nx, ny) != wanted) {
+        continue;
+      }
+      if (SDL_fabsf(cornerClaim(nx, ny, cx, cy) - claim) < 0.5f) {
+        count++;
+      }
+    }
+    return count;
   };
 
   for (uint32_t tile_y = 0; tile_y < height; tile_y++) {
@@ -1227,11 +1248,20 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       };
       for (int overlay = 0; overlay < overlay_count; overlay++) {
         int overlay_type = overlay_types[overlay];
+        // Pairs with a two tile texture on either side — water against a
+        // shore — interpolate their blend through the tile centre instead
+        // of pinching it to zero there, which is what stretches vanilla's
+        // shore feather over roughly two tiles (fshore's coast envelope:
+        // RMS 0.047 vs 0.070 with the pinch)
+        bool wide_overlay = (this->terrain_texture_span.contains(overlay_type) &&
+                             this->terrain_texture_span[overlay_type] == 2) ||
+                            (this->terrain_texture_span.contains((int) tile.type) &&
+                             this->terrain_texture_span[(int) tile.type] == 2);
         float corner_alpha[4];
         for (int i = 0; i < 4; i++) {
           int cx = (int) tile_x + corner_offsets[i][0];
           int cy = (int) tile_y + corner_offsets[i][1];
-          corner_alpha[i] = (float) cornerTypeCount(cx, cy, overlay_type) / 4.0f;
+          corner_alpha[i] = (float) cornerTypeCount(cx, cy, overlay_type, corner_h[i]) / 4.0f;
         }
         // The overlay carries its own art, so it wants its own corners:
         // water spans two tiles where the ground under it spans one
@@ -1255,7 +1285,12 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         // there: the splat is strongest at the corners and fades inward.
         // That is what shades a lone tile from its own colour at the middle
         // out to a quarter of it at the corners.
-        center_vertex.color = {brightness, brightness, brightness, 0.0f};
+        // A wide feathered overlay's ramp passes through tile centres, so
+        // its centre carries the mean of the corners instead of zero
+        float center_alpha = wide_overlay
+            ? (corner_alpha[0] + corner_alpha[1] + corner_alpha[2] + corner_alpha[3]) / 4.0f
+            : 0.0f;
+        center_vertex.color = {brightness, brightness, brightness, center_alpha};
         center_vertex.tex_coord = {
           (overlay_coordinates[0].x + overlay_coordinates[2].x) / 2.0f,
           (overlay_coordinates[0].y + overlay_coordinates[2].y) / 2.0f,
