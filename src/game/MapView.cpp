@@ -1308,6 +1308,16 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     }
   }
 
+  // The original's zoomed out view reads box filtered while its zoom 1
+  // stays point sampled (its dm summit at half zoom: linear cuts our land
+  // error 29.1 -> 25.9, while at full zoom linear halves sand contrast),
+  // so the terrain filter follows the zoom
+  SDL_ScaleMode terrain_scale_mode = this->zoom < 1.0f ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
+  for (auto &entry : this->terrain_textures) {
+    if (entry.second != nullptr) {
+      SDL_SetTextureScaleMode(entry.second, terrain_scale_mode);
+    }
+  }
   for (auto &batch : cliff_batches) {
     SDL_RenderGeometry(renderer, this->terrain_textures[batch.first], batch.second.data(),
                        (int) batch.second.size(), cliff_indices[batch.first].data(),
