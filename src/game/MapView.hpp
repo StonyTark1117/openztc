@@ -119,6 +119,11 @@ private:
     float tile_x = 0.0f;
     float tile_y = 0.0f;
     float level = 0.0f;
+    // Tank exhibit entrance gates ride the same paint order: rotation
+    // picks the gate art's view and level carries the rim height
+    bool gate = false;
+    uint32_t gate_rotation = 0;
+    const char * gate_piece = "gate";
   };
   std::vector<WaterDraw> water_draws;
   std::vector<SimGuest> sim_guests;

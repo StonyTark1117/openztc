@@ -542,6 +542,56 @@ void MapView::sortObjects() {
     this->sorted_object_keys.push_back({key.row, key.column, key.phase});
   }
   this->water_draws.clear();
+  // Tank exhibit entrance gates: the record's entrance tile and rotation
+  // place the gate piece on the wall (med_kids' dolphin gate at 23,87)
+  for (const ZooExhibit &exhibit : this->zoo->getExhibits()) {
+    if ((exhibit.extension_type & 0x10000) == 0) {
+      continue;
+    }
+    uint64_t key = ((uint64_t) (uint32_t) exhibit.x << 32) | (uint32_t) exhibit.y;
+    auto rim_entry = this->tank_rim.find(key);
+    float rim = 0.0f;
+    if (rim_entry != this->tank_rim.end()) {
+      rim = rim_entry->second;
+    } else {
+      // The entrance tile may sit just outside the region; try neighbors
+      static const int offsets[4][2] = {{1,0},{0,1},{-1,0},{0,-1}};
+      for (const auto &off : offsets) {
+        auto n = this->tank_rim.find(((uint64_t) (uint32_t) (exhibit.x + off[0]) << 32) |
+                                     (uint32_t) (exhibit.y + off[1]));
+        if (n != this->tank_rim.end()) { rim = n->second; break; }
+      }
+    }
+    // The striped arch stands at the entrance tile; show tanks also put
+    // the trainer platform and ladder at the record's own corner
+    struct Furniture { const char * piece; int x; int y; };
+    Furniture pieces[3];
+    int piece_count = 0;
+    pieces[piece_count++] = {"gate", exhibit.entrance_x, exhibit.entrance_y};
+    if ((exhibit.extension_type & 0x1000000) != 0) {
+      pieces[piece_count++] = {"platform", exhibit.x, exhibit.y};
+      pieces[piece_count++] = {"ladrin", exhibit.x, exhibit.y};
+    }
+    // The trainer furniture mounts at the wall top, the arch stays at
+    // ground level for the guests walking through it
+    float furniture_rim[3] = {rim, rim + 3.0f, rim + 3.0f};
+    for (int f = 0; f < piece_count; f++) {
+      WaterDraw draw;
+      draw.gate = true;
+      draw.gate_piece = pieces[f].piece;
+      draw.gate_rotation = (uint32_t) exhibit.entrance_rotation;
+      draw.tile_x = (float) pieces[f].x;
+      draw.tile_y = (float) pieces[f].y;
+      draw.level = furniture_rim[f];
+      float center_world_x;
+      float center_depth;
+      this->tileToWorld(draw.tile_x + 0.5f, draw.tile_y + 0.5f, &center_world_x, &center_depth);
+      draw.key.row = (int) SDL_lroundf(center_depth / TILE_HALF_HEIGHT);
+      draw.key.column = (int) SDL_lroundf(center_world_x / TILE_HALF_WIDTH);
+      draw.key.phase = 1;
+      this->water_draws.push_back(draw);
+    }
+  }
   for (const auto &entry : this->tank_water_tiles) {
     WaterDraw draw;
     draw.tile_x = (float) (int) (entry.first >> 32);
@@ -1584,6 +1634,34 @@ void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object
 // fringe pieces are for half tile aligned tanks, which med_kids does not
 // have.
 void MapView::drawWaterTile(SDL_Renderer * renderer, const WaterDraw &draw, float center_x, float center_y) {
+  if (draw.gate) {
+    Animation * gate = this->resource_manager->getAnimation(
+        std::string("fences/tank1/g/") + draw.gate_piece + "/" + draw.gate_piece);
+    if (gate == nullptr) {
+      return;
+    }
+    float world_x;
+    float world_y;
+    this->tileToWorld(draw.tile_x + 0.5f, draw.tile_y + 0.5f, &world_x, &world_y);
+    world_y -= draw.level * HEIGHT_STEP;
+    float screen_x = (world_x - this->camera_x) * this->zoom + center_x;
+    float screen_y = (world_y - this->camera_y) * this->zoom + center_y;
+    float box_x0 = 0.0f;
+    float box_y0 = 0.0f;
+    float box_width = 0.0f;
+    float box_height = 0.0f;
+    if (!gate->getBox(&box_x0, &box_y0, &box_width, &box_height)) {
+      return;
+    }
+    SDL_FRect destination = {
+      (float) SDL_lroundf(screen_x + box_x0 * this->zoom),
+      (float) SDL_lroundf(screen_y + box_y0 * this->zoom),
+      (float) SDL_lroundf(box_width * this->zoom),
+      (float) SDL_lroundf(box_height * this->zoom),
+    };
+    gate->drawByKey(renderer, &destination, this->rotationDirection(draw.gate_rotation));
+    return;
+  }
   Animation * top = this->resource_manager->getAnimation("water/salt/top/top");
   if (top == nullptr) {
     return;
