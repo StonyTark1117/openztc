@@ -111,6 +111,8 @@ size_t ZooFile::parseExhibits(const uint8_t * data, size_t size, size_t position
     // carry 28 more bytes, the later ones 30 bytes, an extension type and
     // extra data for tanks
     exhibit.extension_type = 0;
+    exhibit.water_level = 0;
+    exhibit.tank_height = 0;
     if (variant == 'F' || variant == 'G') {
       position += 28;
     } else {
@@ -121,7 +123,12 @@ size_t ZooFile::parseExhibits(const uint8_t * data, size_t size, size_t position
       exhibit.extension_type = readUint32(data, position);
       position += 4;
       if (exhibit.extension_type == 0x10000) {
-        // Tanks carry 21 more bytes
+        // Tanks carry 21 more bytes, beginning with the water level and
+        // a height field
+        if (position + 8 <= size) {
+          exhibit.water_level = readUint32(data, position);
+          exhibit.tank_height = readUint32(data, position + 4);
+        }
         position += 21;
       } else if (exhibit.extension_type != 0) {
         // Show tanks and unknown extensions have variable data, give up

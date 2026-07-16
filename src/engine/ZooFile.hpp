@@ -64,6 +64,12 @@ typedef struct {
   float total_upkeep;
   // 0 is a plain exhibit, tanks and show tanks carry more data
   uint32_t extension_type;
+  // The first two fields of a tank's extra data. The water sits at
+  // floor + water_level - 1 steps (verified twice on med_kids' shark
+  // tank across two save states); tank_height's exact meaning is still
+  // being pinned down.
+  uint32_t water_level;
+  uint32_t tank_height;
 } ZooExhibit;
 
 // Reader for the zoo save/map format. The format starts with a TZFB magic

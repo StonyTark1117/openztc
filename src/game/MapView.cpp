@@ -208,6 +208,35 @@ void MapView::buildTankWater() {
       if (!level_found) {
         continue;
       }
+      // A tank exhibit whose corner sits in the region carries the stored
+      // water level: the surface sits at floor + water_level - 1 steps
+      // (verified on med_kids' shark tank across two save states)
+      float floor_height = 0.0f;
+      bool floor_found = false;
+      for (uint64_t key : region) {
+        float h = (float) (int32_t) this->zoo->getTile((uint32_t) (key >> 32), (uint32_t) (uint32_t) key).height;
+        if (!floor_found || h < floor_height) {
+          floor_height = h;
+          floor_found = true;
+        }
+      }
+      for (const ZooExhibit &exhibit : this->zoo->getExhibits()) {
+        if (exhibit.extension_type != 0x10000 || exhibit.water_level == 0) {
+          continue;
+        }
+        uint64_t exhibit_key = ((uint64_t) (uint32_t) exhibit.x << 32) | (uint32_t) exhibit.y;
+        bool inside = false;
+        for (uint64_t key : region) {
+          if (key == exhibit_key) {
+            inside = true;
+            break;
+          }
+        }
+        if (inside && floor_found) {
+          level = floor_height + (float) exhibit.water_level - 1.0f;
+          break;
+        }
+      }
       if (SDL_getenv("OPENZTC_DEBUG_TANK") != nullptr) {
         int fx = (int) (region.front() >> 32);
         int fy = (int) (uint32_t) region.front();
@@ -1397,9 +1426,6 @@ void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object
   }
   float base = (float) object->elevation / 16.0f;
   float outside = (float) (int32_t) this->zoo->getTile((uint32_t) near_x, (uint32_t) near_y).height;
-  if (base + TANK_WALL_STEPS <= outside) {
-    return;
-  }
   // The face normal points from the tank to the outside; a rightward one
   // on screen shows the right view, a leftward one the front view
   float far_world_x;
@@ -1456,9 +1482,16 @@ void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object
       }
     }
   }
-  if (object->subcategory != "tankwal1" || bands <= 0) {
+  // The frame rises to the wall's full height above the outside ground
+  // whether or not water stands that high, so the glass panes and rails
+  // show on a tank whose surface sits at the rim
+  int frame_bands = (int) SDL_ceilf(outside + TANK_WALL_STEPS - SDL_max(base, outside));
+  if (object->subcategory.empty() || frame_bands <= 0) {
     return;
   }
+  // Each wall type has its own frame kit: tankwal1 draws from
+  // fences/tank1, tankwal3 from tank3 and so on
+  std::string kit = "fences/tank" + object->subcategory.substr(object->subcategory.size() - 1) + "/f/";
   // The dark frame over the glass comes from the tank1 kit: a rail band
   // at the bottom and top with the post-only band between, and the post
   // sits on whichever end the wall's run stops at (lcr left, rcr right,
@@ -1495,15 +1528,15 @@ void MapView::drawTankWallFace(SDL_Renderer * renderer, const ZooObject * object
   float mid_world_y;
   this->tileToWorld(tile_x, tile_y, &mid_world_x, &mid_world_y);
   float frame_x = (mid_world_x - this->camera_x) * this->zoom + center_x;
-  for (int band = 0; band < bands; band++) {
-    const char * band_name = bands == 1 ? "low" : band == 0 ? "bot" : band == bands - 1 ? "top" : "mid";
+  for (int band = 0; band < frame_bands; band++) {
+    const char * band_name = frame_bands == 1 ? "low" : band == 0 ? "bot" : band == frame_bands - 1 ? "top" : "mid";
     // The kit ships no collow piece, so an isolated one step wall borrows
     // the middle low band
     std::string piece = std::string(position) + band_name;
     if (piece == "collow") {
       piece = "midlow";
     }
-    Animation * frame = this->resource_manager->getAnimation("fences/tank1/f/" + piece + "/" + piece);
+    Animation * frame = this->resource_manager->getAnimation(kit + piece + "/" + piece);
     if (frame == nullptr) {
       continue;
     }
