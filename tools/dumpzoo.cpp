@@ -58,9 +58,9 @@ int main(int argc, char ** argv) {
         }
       }
     }
-    printf("%s: variant=%c lang=%u size=%ux%u objects=%u heights=[%d..%d] terrain_types=",
+    printf("%s: variant=%c lang=%u size=%ux%u objects=%u terrain@%zu heights=[%d..%d] terrain_types=",
            argv[i], zoo->getVariant(), zoo->getLanguage(), zoo->getWidth(),
-           zoo->getHeight(), zoo->getObjectCount(), min_height, max_height);
+           zoo->getHeight(), zoo->getObjectCount(), zoo->getTerrainStart(), min_height, max_height);
     for (auto entry : type_counts) {
       printf("%02x:%d ", entry.first, entry.second);
     }

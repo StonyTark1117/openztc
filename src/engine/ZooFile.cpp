@@ -227,6 +227,7 @@ ZooFile * ZooFile::loadFromMemory(const void * raw, size_t size) {
     zoo->tiles.push_back(tile);
   }
 
+  zoo->terrain_start = terrain_start;
   zoo->header_raw.assign(data, data + terrain_start);
 
   size_t object_start = terrain_start + terrain_size;

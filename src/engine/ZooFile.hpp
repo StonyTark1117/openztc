@@ -86,6 +86,7 @@ public:
 
   const ZooTerrainTile & getTile(uint32_t x, uint32_t y) const;
 
+  size_t getTerrainStart() const { return this->terrain_start; }
   uint32_t getObjectCount() const { return this->object_count; }
   const std::vector<uint8_t> & getObjectSection() const { return this->object_section; }
   const std::vector<ZooObject> & getObjects() const { return this->objects; }
@@ -110,6 +111,10 @@ private:
   // Everything before the terrain stream, kept raw for writing until all
   // of it is understood
   std::vector<uint8_t> header_raw;
+  // Where the terrain stream begins. The parser has to hunt for it, and
+  // anything working the format from outside needs the same answer, so keep
+  // what was found rather than making every tool guess it again.
+  size_t terrain_start = 0;
   std::vector<uint8_t> object_section;
   std::vector<ZooObject> objects;
 
