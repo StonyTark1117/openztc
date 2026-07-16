@@ -767,6 +767,13 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
     return typeAt(cx - 1, cy - 1) == wanted || typeAt(cx, cy - 1) == wanted ||
            typeAt(cx - 1, cy) == wanted || typeAt(cx, cy) == wanted;
   };
+  // How many of the four tiles meeting at a grid corner carry a type. The
+  // original weighs a corner by exactly this, so a corner where one tile in
+  // four is gray rock is a quarter gray rock.
+  auto cornerTypeCount = [&](int cx, int cy, int wanted) -> int {
+    return (typeAt(cx - 1, cy - 1) == wanted ? 1 : 0) + (typeAt(cx, cy - 1) == wanted ? 1 : 0) +
+           (typeAt(cx - 1, cy) == wanted ? 1 : 0) + (typeAt(cx, cy) == wanted ? 1 : 0);
+  };
 
   for (uint32_t tile_y = 0; tile_y < height; tile_y++) {
     for (uint32_t tile_x = 0; tile_x < width; tile_x++) {
@@ -965,14 +972,12 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       indices.push_back(base + 3);
 
       // Where a different terrain type touches this tile — including
-      // diagonally — its texture splats across the whole tile, full at the
-      // corners that touch it and fading to nothing at the ones that do
-      // not, the way the original's blended terrain mesh looks. Higher type
-      // numbers paint over lower ones: Death Mountain's gray rock (06) is
-      // what covers its brown rock (05), and painting it the other way
-      // round left the ground 13 percent dark and orange against the
-      // original. Each overlay type is gathered once from all eight
-      // neighbors. Concrete and asphalt carry blend=0 and take no part.
+      // diagonally — its texture splats over it, weighted per corner by how
+      // many of the four tiles meeting there carry that type. There is no
+      // priority between types: the original mixes every neighbour in, which
+      // is why a lone gray rock tile sitting in sand comes out half sand
+      // rather than staying gray. Each overlay type is gathered once from all
+      // eight neighbors. Concrete and asphalt carry blend=0 and take no part.
       const int around_offsets[8][2] = {{0, -1}, {1, -1}, {1, 0},  {1, 1},
                                         {0, 1},  {-1, 1}, {-1, 0}, {-1, -1}};
       int overlay_types[8];
@@ -980,7 +985,7 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       bool tile_blends = !this->unblended_terrain_types.contains((int) tile.type);
       for (int i = 0; i < 8 && tile_blends; i++) {
         int neighbor_type = typeAt((int) tile_x + around_offsets[i][0], (int) tile_y + around_offsets[i][1]);
-        if (neighbor_type < 0 || neighbor_type <= (int) tile.type ||
+        if (neighbor_type < 0 || neighbor_type == (int) tile.type ||
             !this->terrain_textures.contains(neighbor_type) ||
             this->unblended_terrain_types.contains(neighbor_type)) {
           continue;
@@ -1003,12 +1008,10 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
       for (int overlay = 0; overlay < overlay_count; overlay++) {
         int overlay_type = overlay_types[overlay];
         float corner_alpha[4];
-        float alpha_sum = 0.0f;
         for (int i = 0; i < 4; i++) {
           int cx = (int) tile_x + corner_offsets[i][0];
           int cy = (int) tile_y + corner_offsets[i][1];
-          corner_alpha[i] = cornerTouchesType(cx, cy, overlay_type) ? 1.0f : 0.0f;
-          alpha_sum += corner_alpha[i];
+          corner_alpha[i] = (float) cornerTypeCount(cx, cy, overlay_type) / 4.0f;
         }
         // The overlay carries its own art, so it wants its own corners:
         // water spans two tiles where the ground under it spans one
@@ -1028,7 +1031,11 @@ void MapView::draw(SDL_Renderer * renderer, SDL_FRect * window_rect) {
         // quad instead of leaning on one diagonal
         SDL_Vertex center_vertex;
         center_vertex.position = tile_center;
-        center_vertex.color = {brightness, brightness, brightness, alpha_sum / 4.0f};
+        // A tile keeps its own type at its centre, so no overlay reaches
+        // there: the splat is strongest at the corners and fades inward.
+        // That is what shades a lone tile from its own colour at the middle
+        // out to a quarter of it at the corners.
+        center_vertex.color = {brightness, brightness, brightness, 0.0f};
         center_vertex.tex_coord = {
           (overlay_coordinates[0].x + overlay_coordinates[2].x) / 2.0f,
           (overlay_coordinates[0].y + overlay_coordinates[2].y) / 2.0f,
